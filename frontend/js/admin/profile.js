@@ -1,17 +1,18 @@
 // ============================================================
 // SMARTACADEMIC — Admin Profile Page
 // Loads profile, uploads photo, edits name/phone, changes password.
+// Self-contained — does not rely on inline scripts.
 // ============================================================
 
 'use strict';
 
 (function () {
-  const token = localStorage.getItem('sa_token');
+  function getToken() { return localStorage.getItem('sa_token'); }
 
   async function apiFetch(path, opts = {}) {
     const res = await fetch(path, {
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'Bearer ' + getToken(),
         'Content-Type': 'application/json',
       },
       ...opts,
@@ -29,7 +30,7 @@
   function toast(msg, type = 'success') {
     const el = document.createElement('div');
     el.style.cssText = `
-      position:fixed; bottom:24px; right:24px; z-index:999;
+      position:fixed; bottom:24px; right:24px; z-index:9999;
       padding:12px 18px; border-radius:10px; font-size:14px; font-weight:600;
       box-shadow:0 10px 30px rgba(0,0,0,.18);
       background:${type === 'error' ? '#fee2e2' : '#dcfce7'};
@@ -55,25 +56,28 @@
   async function load() {
     const { ok, data } = await apiFetch('/api/auth/me');
     if (!ok) {
-      console.error('[profile] Failed to load');
+      console.error('[admin/profile] Failed to load user');
       return;
     }
     currentUser = data.data.user;
-    renderProfile();
+    renderProfileCard();
     renderPhoto();
   }
 
-  function renderProfile() {
+  function renderProfileCard() {
     const u = currentUser;
-    const initials = u.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-
     const card = document.getElementById('profileCard');
     if (!card) return;
 
+    const initials = u.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const avatarStyle = u.photo_url
+      ? `background-image:url('${u.photo_url}');background-size:cover;background-position:center;color:transparent;`
+      : '';
+
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
-        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#166534,#ca8a04);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;${u.photo_url ? `background-image:url('${u.photo_url}');background-size:cover;background-position:center;` : ''}">
-          ${u.photo_url ? '' : initials}
+        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#166534,#ca8a04);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;${avatarStyle}">
+          ${initials}
         </div>
         <div>
           <div style="font-size:18px;font-weight:800;">${esc(u.full_name)}</div>
@@ -91,7 +95,8 @@
       <button class="btn btn-ghost w-full mt-4" id="btnEdit" type="button">✏️ Edit Profile</button>
     `;
 
-    document.getElementById('btnEdit')?.addEventListener('click', openEdit);
+    const btn = document.getElementById('btnEdit');
+    if (btn) btn.addEventListener('click', openEdit);
   }
 
   function renderPhoto() {
@@ -104,6 +109,8 @@
 
     if (u.photo_url) {
       preview.style.backgroundImage = `url('${u.photo_url}')`;
+      preview.style.backgroundSize = 'cover';
+      preview.style.backgroundPosition = 'center';
       preview.textContent = '';
       if (removeBtn) removeBtn.style.display = 'inline-flex';
     } else {
@@ -114,12 +121,12 @@
   }
 
   /* ============================================================
-     EDIT NAME / PHONE
+     EDIT NAME / PHONE MODAL
      ============================================================ */
   function openEdit() {
     const modal = document.createElement('div');
     modal.style.cssText = `
-      position:fixed; inset:0; z-index:999; background:rgba(15,23,42,.55);
+      position:fixed; inset:0; z-index:9998; background:rgba(15,23,42,.55);
       backdrop-filter:blur(4px); display:grid; place-items:center; padding:20px;
     `;
     modal.innerHTML = `
@@ -176,29 +183,29 @@
 
     uploadBtn.addEventListener('click', () => input.click());
 
-    input.addEventListener('change', async (e) => {
+    input.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       if (file.size > 2 * 1024 * 1024) {
         alert('File too large. Max 2 MB.');
+        input.value = '';
         return;
       }
 
-      // Compress via canvas — resize to max 500×500
       const reader = new FileReader();
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = async () => {
+          // Center-crop to square + resize to 500×500
           const canvas = document.createElement('canvas');
-          const size = Math.min(500, Math.min(img.width, img.height));
+          const size = 500;
           canvas.width = size;
           canvas.height = size;
           const ctx = canvas.getContext('2d');
 
-          // Center crop
-          const sx = (img.width - Math.min(img.width, img.height)) / 2;
-          const sy = (img.height - Math.min(img.height, img.height)) / 2;
           const sSize = Math.min(img.width, img.height);
+          const sx = (img.width - sSize) / 2;
+          const sy = (img.height - sSize) / 2;
           ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, size, size);
 
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
@@ -206,25 +213,30 @@
           uploadBtn.disabled = true;
           uploadBtn.textContent = '⏳ Uploading...';
 
-          const { ok, data } = await apiFetch('/api/admin/profile/photo', {
-            method: 'POST',
-            body: JSON.stringify({ photo: dataUrl }),
-          });
+          try {
+            const { ok, data } = await apiFetch('/api/admin/profile/photo', {
+              method: 'POST',
+              body: JSON.stringify({ photo: dataUrl }),
+            });
 
-          uploadBtn.disabled = false;
-          uploadBtn.textContent = '📷 Upload New Photo';
-
-          if (!ok) {
-            alert(data?.error || 'Upload failed');
-            return;
+            if (!ok) {
+              alert(data?.error || 'Upload failed');
+              return;
+            }
+            toast('Photo updated');
+            await load();
+          } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '📷 Upload New Photo';
           }
-          toast('Photo updated');
-          load();
         };
+        img.onerror = () => alert('Could not read image file.');
         img.src = ev.target.result;
       };
+      reader.onerror = () => alert('Could not read file.');
       reader.readAsDataURL(file);
-      e.target.value = '';
+
+      input.value = '';
     });
 
     if (removeBtn) {
@@ -233,7 +245,7 @@
         const { ok } = await apiFetch('/api/admin/profile/photo', { method: 'DELETE' });
         if (!ok) { alert('Failed'); return; }
         toast('Photo removed');
-        load();
+        await load();
       });
     }
   }
@@ -245,7 +257,7 @@
     const form = document.getElementById('pwForm');
     if (!form) return;
 
-    // Password toggles
+    // Password visibility toggles
     document.querySelectorAll('.pw-toggle').forEach(btn => {
       btn.addEventListener('click', () => {
         const t = document.getElementById(btn.dataset.target);

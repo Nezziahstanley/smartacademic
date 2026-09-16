@@ -24,17 +24,39 @@ const { globalLimiter } = require('./backend/middleware/rateLimiter');
 const app = express();
 
 // ============================================================
-// 1. SECURITY & CORE MIDDLEWARE
+// 1. SECURITY MIDDLEWARE
+//    Content Security Policy configured to allow:
+//      - Chart.js from CDN (jsdelivr)
+//      - Google Fonts
+//      - Data URLs (uploaded photos)
+//      - Blob URLs (video playback)
 // ============================================================
 app.use(helmet({
-  contentSecurityPolicy: env.isDevelopment ? false : undefined,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "https://cdn.jsdelivr.net"],
+      styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:    ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc:     ["'self'", "data:", "blob:", "https:"],
+      mediaSrc:   ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"],
+      objectSrc:  ["'none'"],
+      frameSrc:   ["'none'"],
+      baseUri:    ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // allows external images/videos
 }));
+
 app.use(cors({
-  origin: env.CLIENT_URL,
+  origin: env.CLIENT_URL || true,
   credentials: true,
 }));
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+app.use(express.json({ limit: '10mb' }));         // increase for base64 photos
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ============================================================
 // 2. LOGGING
@@ -46,26 +68,24 @@ if (env.isDevelopment) {
 }
 
 // ============================================================
-// 3. RATE LIMITING (API only — not static files)
+// 3. RATE LIMITING (API only)
 // ============================================================
 app.use('/api', globalLimiter);
 
 // ============================================================
-// 4. API ROUTES  →  /api/*
+// 4. API ROUTES → /api/*
 // ============================================================
 app.use('/api', apiRoutes);
 
 // ============================================================
 // 5. STATIC FRONTEND
-//    Serves frontend/public at /, and other folders by URL.
-//    Example: /admin/dashboard.html, /css/base.css
 // ============================================================
 const frontendRoot = path.join(__dirname, 'frontend');
 
 // Public site
 app.use('/', express.static(path.join(frontendRoot, 'public')));
 
-// Dashboard folders (admin, hod, lecturer, student)
+// Dashboard folders
 app.use('/admin',    express.static(path.join(frontendRoot, 'admin')));
 app.use('/hod',      express.static(path.join(frontendRoot, 'hod')));
 app.use('/lecturer', express.static(path.join(frontendRoot, 'lecturer')));
@@ -117,14 +137,13 @@ function shutdown(signal) {
     process.exit(0);
   });
 
-  // Force exit after 10s
   setTimeout(() => {
     console.error('[server] Forcing exit after 10s.');
     process.exit(1);
   }, 10000).unref();
 }
 
-process.on('SIGINT',  () => shutdown('SIGINT'));  // Ctrl + C
+process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 process.on('unhandledRejection', (reason) => {
