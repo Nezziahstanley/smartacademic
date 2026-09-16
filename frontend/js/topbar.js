@@ -1,8 +1,9 @@
 // ============================================================
 // SMARTACADEMIC — Topbar + Component Loader
 // Loads sidebar.html and topbar.html into the page, hydrates
-// user info, wires notifications panel, profile menu,
-// Help & Support modal, and enforces authentication.
+// user info (including profile photo), wires notifications,
+// profile menu, and Help & Support modal.
+// Enforces authentication on every dashboard page.
 // ============================================================
 
 'use strict';
@@ -35,13 +36,13 @@
     return;
   }
 
-  // Stamp the role on <body> so CSS can show the right sidebar menu
+  // Stamp role on body for CSS-driven sidebar menus
   document.body.dataset.role = role;
 
   let currentUser = null;
 
   /* ============================================================
-     2. LOAD COMPONENTS (sidebar + topbar) into placeholders
+     2. COMPONENT LOADER
      ============================================================ */
   async function injectComponent(id, url) {
     const el = document.getElementById(id);
@@ -107,7 +108,6 @@
         </div>`;
     }).join('');
 
-    // Click to mark read
     list.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', async () => {
         const id = parseInt(el.dataset.id, 10);
@@ -155,24 +155,40 @@
   }
 
   /* ============================================================
-     4. HYDRATE USER INFO
+     4. HYDRATE USER (name, role, email, PHOTO)
      ============================================================ */
   function hydrateUser(user) {
     currentUser = user;
     const name = user.full_name || 'User';
     const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
-    $$('[data-user-avatar]').forEach(el => el.textContent = initials);
+    // ---------- Avatar (photo OR initials) ----------
+    $$('[data-user-avatar]').forEach(el => {
+      if (user.photo_url) {
+        el.textContent = '';
+        el.style.backgroundImage = `url('${user.photo_url}')`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        el.style.color = 'transparent';
+      } else {
+        el.textContent = initials;
+        el.style.backgroundImage = '';
+        el.style.color = '';
+      }
+    });
+
+    // ---------- Name / Role / Email ----------
     $$('[data-user-name]').forEach(el => el.textContent = name);
     $$('[data-user-role]').forEach(el => el.textContent = ROLE_LABELS[user.role_name] || user.role_name);
     $$('[data-user-email]').forEach(el => el.textContent = user.email);
 
+    // ---------- Sidebar role pill ----------
     const sbRole = $('[data-sidebar-role]');
     if (sbRole) sbRole.textContent = ROLE_LABELS[user.role_name] || user.role_name;
   }
 
   /* ============================================================
-     5. WIRE PROFILE MENU
+     5. PROFILE MENU
      ============================================================ */
   function wireProfileMenu() {
     const profile = $('.profile');
@@ -190,7 +206,7 @@
       if (!profile.contains(e.target)) profile.classList.remove('open');
     });
 
-    // Wire the profile menu items to correct destinations per role
+    // Role base path
     const base =
       role === 'admin'    ? '/admin' :
       role === 'hod'      ? '/hod' :
@@ -209,11 +225,11 @@
       if (role === 'admin') {
         settingsLink.setAttribute('href', '/admin/settings.html');
       } else {
-        settingsLink.setAttribute('href', `${base}/profile.html#settings`);
+        settingsLink.setAttribute('href', `${base}/profile.html#change-password`);
       }
     }
 
-    // Help & Support — modal for admin/hod/lecturer, link for student
+    // Help & Support — Student gets their support page, others get modal
     if (helpLink) {
       if (role === 'student') {
         helpLink.setAttribute('href', '/student/support.html');
@@ -228,7 +244,7 @@
       }
     }
 
-    // Close dropdown after clicking any item (except logout/help which handle their own)
+    // Close dropdown after clicking any item (except logout/help)
     profile.querySelectorAll('.pm-item').forEach(item => {
       if (item.hasAttribute('data-logout')) return;
       if (item === helpLink) return;
@@ -309,13 +325,6 @@
               <div style="font-size:13px;color:#64748b;">0901 616 2662</div>
             </div>
           </a>
-
-          <div style="
-            padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;
-            font-size:13px;color:#1e40af;line-height:1.6;
-          ">
-            <strong>💡 Tip:</strong> For technical issues, please include your email address and a screenshot of the problem.
-          </div>
         </div>
 
         <button id="saHelpClose2" style="
@@ -395,6 +404,9 @@
       }
       const json = await res.json();
       hydrateUser(json.data.user);
+
+      // Cache for offline fallback
+      localStorage.setItem(STORAGE.USER, JSON.stringify(json.data.user));
     } catch {
       const cached = localStorage.getItem(STORAGE.USER);
       if (cached) {
@@ -402,14 +414,14 @@
       }
     }
 
-    // Initialize sidebar behaviors (once components are in the DOM)
+    // Initialize sidebar behaviors
     if (window.Sidebar) window.Sidebar.init();
 
     // Wire topbar interactions
     wireProfileMenu();
     wireNotifications();
 
-    // Notify the page it's ready
+    // Notify the page that layout is ready
     document.dispatchEvent(new CustomEvent('sa:layout-ready'));
   }
 
