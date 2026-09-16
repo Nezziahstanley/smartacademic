@@ -3,28 +3,85 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Courses — HOD</title>
+  <title>Courses — SMARTACADEMIC HOD</title>
   <link rel="stylesheet" href="/css/layout.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
 </head>
 <body>
+
   <div class="app-shell">
     <div id="sidebarSlot"></div>
+
     <div class="main">
       <div id="topbarSlot"></div>
+
       <main class="page">
-        <div class="page-header"><div><h1>Department Courses</h1><p>Courses assigned to your department.</p></div></div>
+
+        <div class="page-header">
+          <div>
+            <h1>Department Courses</h1>
+            <p>All courses in your department. Assign lecturers to each course.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnNew">+ New Course</button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by code or title..." />
+          </div>
+          <select class="select" id="levelFilter" style="max-width: 160px;">
+            <option value="">All levels</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+          </select>
+          <select class="select" id="semesterFilter" style="max-width: 160px;">
+            <option value="">All semesters</option>
+            <option value="First">First</option>
+            <option value="Second">Second</option>
+            <option value="Summer">Summer</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <!-- Courses table -->
         <div class="table-wrap">
           <table class="table">
-            <thead><tr><th>Code</th><th>Title</th><th>Units</th><th>Level</th><th>Semester</th><th>Lecturer</th><th>Registered</th></tr></thead>
-            <tbody id="tbody"><tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Title</th>
+                <th>Units</th>
+                <th>Level</th>
+                <th>Semester</th>
+                <th>Lecturer</th>
+                <th>Registered</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
           </table>
         </div>
+
       </main>
     </div>
   </div>
+
+  <!-- Modal container (used by JS) -->
+  <div id="modalRoot"></div>
+
+  <!-- Scripts -->
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
