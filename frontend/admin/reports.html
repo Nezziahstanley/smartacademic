@@ -1,0 +1,155 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+
+    <div class="main">
+      <div id="topbarSlot"></div>
+
+      <main class="page">
+
+        <!-- ============ PAGE HEADER ============ -->
+        <div class="page-header">
+          <div>
+            <h1>Reports</h1>
+            <p>Generate and export analytical reports for decision-making.</p>
+          </div>
+        </div>
+
+        <!-- ============ ROW 1: RISK + PERFORMANCE ============ -->
+        <div class="grid-2 mb-4">
+
+          <!-- Risk Distribution -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Risk Distribution</h3>
+                <p>Current risk levels across all students</p>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-ghost btn-sm" data-export="risk" data-format="csv">CSV</button>
+                <button class="btn btn-ghost btn-sm" data-export="risk" data-format="pdf">PDF</button>
+                <button class="btn btn-ghost btn-sm" data-export="risk" data-format="excel">Excel</button>
+              </div>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th style="text-align:right;">Count</th>
+                  </tr>
+                </thead>
+                <tbody id="riskBody">
+                  <tr><td colspan="2"><div class="skeleton" style="height:20px;"></div></td></tr>
+                  <tr><td colspan="2"><div class="skeleton" style="height:20px;"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Departmental Performance -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Departmental Performance</h3>
+                <p>Average GPA per department &amp; level</p>
+              </div>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Department</th>
+                    <th>Level</th>
+                    <th style="text-align:right;">Students</th>
+                    <th style="text-align:right;">Avg GPA</th>
+                  </tr>
+                </thead>
+                <tbody id="perfBody">
+                  <tr><td colspan="4"><div class="skeleton" style="height:20px;"></div></td></tr>
+                  <tr><td colspan="4"><div class="skeleton" style="height:20px;"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============ ROW 2: ATTENDANCE REPORT ============ -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <div>
+              <h3>Attendance Report</h3>
+              <p>Students with lowest attendance percentages</p>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" data-export="attendance" data-format="csv">CSV</button>
+              <button class="btn btn-ghost btn-sm" data-export="attendance" data-format="pdf">PDF</button>
+              <button class="btn btn-ghost btn-sm" data-export="attendance" data-format="excel">Excel</button>
+            </div>
+          </div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Matric</th>
+                  <th>Course</th>
+                  <th style="text-align:right;">Total</th>
+                  <th style="text-align:right;">Present</th>
+                  <th style="text-align:right;">Percent</th>
+                </tr>
+              </thead>
+              <tbody id="attnBody">
+                <tr><td colspan="6"><div class="skeleton" style="height:20px;"></div></td></tr>
+                <tr><td colspan="6"><div class="skeleton" style="height:20px;"></div></td></tr>
+                <tr><td colspan="6"><div class="skeleton" style="height:20px;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ============ ROW 3: STUDENT LOOKUP ============ -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>Student Lookup</h3>
+              <p>Enter a student ID to generate a full academic report</p>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div class="field" style="flex:1;margin-bottom:0;">
+              <label for="lookupId">Student ID</label>
+              <input class="input" id="lookupId" type="number" placeholder="e.g. 1" />
+            </div>
+            <button class="btn btn-primary" id="btnLookup">Generate</button>
+          </div>
+
+          <!-- Output (populated by JS) -->
+          <div id="lookupOutput" style="margin-top:20px;"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ SCRIPTS ============ -->
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/reports.js"></script>
+</body>
+</html>

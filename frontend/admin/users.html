@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Users — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+
+    <div class="main">
+      <div id="topbarSlot"></div>
+
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Users</h1>
+            <p>Manage all accounts across the system.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnNewUser">+ New User</button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by name or email..." />
+          </div>
+          <select class="select" id="roleFilter" style="max-width: 180px;">
+            <option value="">All roles</option>
+            <option value="admin">Admin</option>
+            <option value="hod">HOD</option>
+            <option value="lecturer">Lecturer</option>
+            <option value="student">Student</option>
+          </select>
+          <select class="select" id="statusFilter" style="max-width: 160px;">
+            <option value="">All status</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+        
+        <div class="page-actions">
+          <button class="btn btn-ghost" id="btnInvite">✉️ Invite by Email</button>
+          <button class="btn btn-primary" id="btnNewUser">+ New User</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Last Login</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody">
+              <tr><td colspan="6"><div class="skeleton" style="height: 22px;"></div></td></tr>
+              <tr><td colspan="6"><div class="skeleton" style="height: 22px;"></div></td></tr>
+              <tr><td colspan="6"><div class="skeleton" style="height: 22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+          <span id="paginationInfo">—</span>
+          <div class="pages" id="paginationButtons"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal container (populated by JS) -->
+  <div id="modalRoot"></div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/users.js"></script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications — SMARTACADEMIC Lecturer</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .notif-item { display:flex; gap:14px; padding:16px 18px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .15s; }
+    .notif-item:hover { background:#fafbfd; }
+    .notif-item.unread { background:#f5f7ff; }
+    .notif-ico { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; font-size:18px; flex-shrink:0; }
+    .notif-ico.risk_alert       { background:rgba(239,68,68,.10); color:var(--red); }
+    .notif-ico.attendance_alert { background:rgba(245,158,11,.12); color:var(--yellow); }
+    .notif-ico.result           { background:var(--primary-50); color:var(--primary); }
+    .notif-ico.intervention     { background:rgba(16,185,129,.10); color:var(--green); }
+    .notif-ico.announcement     { background:rgba(202,138,4,.10); color:var(--accent); }
+    .notif-ico.system           { background:#f1f5f9; color:var(--ink-3); }
+    .notif-body { flex:1; min-width:0; }
+    .notif-body strong { display:block; font-size:14.5px; margin-bottom:4px; }
+    .notif-body p { font-size:13.5px; color:var(--ink-3); }
+    .notif-time { font-size:12px; color:var(--muted); margin-top:6px; }
+    .notif-unread-dot { width:8px; height:8px; border-radius:50%; background:var(--primary); margin-top:8px; flex-shrink:0; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Notifications</h1>
+            <p>Your messages, alerts, and announcements.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnMarkAll">✓ Mark all read</button>
+            <button class="btn btn-primary" id="btnBroadcast">📢 Notify My Students</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <div id="notifList">
+            <div style="padding:40px;text-align:center;">
+              <div class="skeleton" style="height:60px;margin-bottom:10px;"></div>
+              <div class="skeleton" style="height:60px;"></div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, toast, openModal } = window.SACrud;
+
+      const ICONS = {
+        risk_alert: '⚠', attendance_alert: '📅', result: '📊',
+        intervention: '🤝', announcement: '📢', system: 'ℹ',
+      };
+
+      function relTime(iso) {
+        const d = new Date(iso);
+        const s = (Date.now() - d.getTime()) / 1000;
+        if (s < 60) return 'just now';
+        if (s < 3600) return Math.floor(s / 60) + 'm ago';
+        if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+        if (s < 604800) return Math.floor(s / 86400) + 'd ago';
+        return d.toLocaleDateString();
+      }
+
+      async function load() {
+        const { ok, data } = await api('/api/notifications');
+        if (!ok) {
+          $('#notifList').innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);">Failed to load notifications.</div>';
+          return;
+        }
+        const items = data.data.items || [];
+        if (!items.length) {
+          $('#notifList').innerHTML = `
+            <div class="empty" style="padding:60px 20px;">
+              <div class="empty-icon">🔔</div>
+              <h3>No notifications</h3>
+              <p>You're all caught up.</p>
+            </div>`;
+          return;
+        }
+        $('#notifList').innerHTML = items.map(n => `
+          <div class="notif-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}">
+            <div class="notif-ico ${n.type || 'system'}">${ICONS[n.type] || 'ℹ'}</div>
+            <div class="notif-body">
+              <strong>${esc(n.title)}</strong>
+              <p>${esc(n.message)}</p>
+              <div class="notif-time">${relTime(n.created_at)}</div>
+            </div>
+            ${n.is_read ? '' : '<div class="notif-unread-dot"></div>'}
+          </div>
+        `).join('');
+        $('#notifList').querySelectorAll('[data-id]').forEach(el =>
+          el.addEventListener('click', async () => {
+            const id = parseInt(el.dataset.id, 10);
+            if (!el.classList.contains('unread')) return;
+            await api('/api/notifications/' + id + '/read', { method: 'POST' });
+            el.classList.remove('unread');
+            el.querySelector('.notif-unread-dot')?.remove();
+          }));
+      }
+
+      async function markAllRead() {
+        const { ok } = await api('/api/notifications/read-all', { method: 'POST' });
+        if (!ok) { alert('Failed'); return; }
+        toast('All marked as read');
+        load();
+      }
+
+      function openBroadcastModal() {
+        openModal({
+          title: 'Notify My Students',
+          subtitle: 'Send a message to students in your courses',
+          size: 'lg',
+          confirmText: '📢 Send Message',
+          body: `
+            <div class="msg msg-info show" style="margin-bottom:16px;">
+              <strong>ℹ️ Note:</strong> This message will be sent to every student registered in courses you teach.
+            </div>
+
+            <div class="field">
+              <label>Title *</label>
+              <input class="input" id="bc_title" placeholder="e.g. Class cancelled today" />
+            </div>
+
+            <div class="field">
+              <label>Message *</label>
+              <textarea class="textarea" id="bc_message" rows="5" placeholder="Type your message here..."></textarea>
+            </div>
+
+            <div id="preview" style="margin-top:16px;padding:14px;background:var(--bg-2);border-radius:8px;">
+              <div style="font-size:12px;color:var(--ink-3);margin-bottom:6px;">Preview</div>
+              <div style="display:flex;gap:12px;align-items:flex-start;">
+                <div style="width:38px;height:38px;border-radius:10px;background:rgba(202,138,4,.10);color:var(--accent);display:grid;place-items:center;font-size:16px;">📢</div>
+                <div style="flex:1;">
+                  <div id="pv_title" style="font-weight:700;font-size:14px;">Your title...</div>
+                  <div id="pv_message" style="font-size:13px;color:var(--ink-3);margin-top:2px;">Your message...</div>
+                </div>
+              </div>
+            </div>
+          `,
+          onReady: (bd) => {
+            const titleEl = bd.querySelector('#bc_title');
+            const msgEl = bd.querySelector('#bc_message');
+            const pvTitle = bd.querySelector('#pv_title');
+            const pvMsg = bd.querySelector('#pv_message');
+            const update = () => {
+              pvTitle.textContent = titleEl.value || 'Your title...';
+              pvMsg.textContent = msgEl.value || 'Your message...';
+            };
+            titleEl.addEventListener('input', update);
+            msgEl.addEventListener('input', update);
+          },
+          onConfirm: async (bd, close) => {
+            const title = bd.querySelector('#bc_title').value.trim();
+            const message = bd.querySelector('#bc_message').value.trim();
+            if (!title) { alert('Title required'); return; }
+            if (!message) { alert('Message required'); return; }
+
+            const btn = bd.querySelector('[data-confirm]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+            const { ok, data } = await api('/api/lecturer/broadcast-students', {
+              method: 'POST',
+              body: JSON.stringify({ title, message }),
+            });
+
+            if (btn) { btn.disabled = false; btn.textContent = '📢 Send Message'; }
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            close();
+            toast(`✅ Sent to ${data.count} students`);
+            load();
+          },
+        });
+      }
+
+      document.addEventListener('sa:layout-ready', () => {
+        $('#btnMarkAll').addEventListener('click', markAllRead);
+        $('#btnBroadcast').addEventListener('click', openBroadcastModal);
+        load();
+      });
+    })();
+  </script>
+</body>
+</html>

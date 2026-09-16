@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Courses — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Department Courses</h1><p>Courses assigned to your department.</p></div></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Code</th><th>Title</th><th>Units</th><th>Level</th><th>Semester</th><th>Lecturer</th><th>Registered</th></tr></thead>
+            <tbody id="tbody"><tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/hod/courses.js"></script>
+</body>
+</html>

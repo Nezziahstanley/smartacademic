@@ -1,0 +1,59 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Academic Status — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Academic Status</h1><p>Your current standing.</p></div></div>
+        <div class="card" id="statusCard"><div class="skeleton" style="height:200px;"></div></div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/student/academic-status');
+      if (!ok) return;
+      const d = data.data;
+      const cat = d.risk ? d.risk.risk_category : 'GREEN';
+      const cls = cat.toLowerCase();
+      const colors = { GREEN: '#10b981', YELLOW: '#f59e0b', ORANGE: '#f97316', RED: '#ef4444' };
+      const messages = {
+        GREEN: '🎉 You are in good standing. Keep it up!',
+        YELLOW: '👍 You are doing okay but there\'s room to improve.',
+        ORANGE: '⚠️ Your academic status needs attention. Please check your interventions.',
+        RED: '🚨 Critical. Immediate action required.',
+      };
+      document.getElementById('statusCard').innerHTML = `
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+          <div style="width:64px;height:64px;border-radius:16px;background:${colors[cat]}22;color:${colors[cat]};display:grid;place-items:center;font-size:28px;">🚦</div>
+          <div>
+            <div style="font-size:22px;font-weight:800;color:${colors[cat]};">${cat}</div>
+            <div style="color:var(--ink-3);">${messages[cat]}</div>
+          </div>
+        </div>
+        <div class="grid-3" style="gap:20px;">
+          <div><div style="font-size:12px;color:var(--ink-3);">Attendance</div><strong>${d.attendancePct}%</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">GPA</div><strong>${d.gpa.toFixed(2)}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Failed Courses</div><strong>${d.failedCourses}</strong></div>
+        </div>
+        ${d.risk && d.risk.factors ? `<div class="msg msg-warning show" style="margin-top:20px;"><strong>Factors:</strong> ${esc(d.risk.factors)}</div>` : ''}
+      `;
+    });
+  </script>
+</body>
+</html>

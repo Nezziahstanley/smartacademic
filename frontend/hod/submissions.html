@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Submissions — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Department Submissions</h1>
+            <p>Propose new students, lecturers, or courses for admin approval.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnNewStudent">+ Student</button>
+            <button class="btn btn-ghost" id="btnNewLecturer">+ Lecturer</button>
+            <button class="btn btn-primary" id="btnNewCourse">+ Course</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Details</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Reviewer</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="5"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, toast } = window.SACrud;
+
+      const STATUS_BADGE = {
+        pending: 'badge-yellow',
+        approved: 'badge-green',
+        rejected: 'badge-red',
+      };
+
+      async function load() {
+        $('#tbody').innerHTML = '<tr><td colspan="5"><div class="skeleton" style="height:22px;"></div></td></tr>';
+        const { ok, data } = await api('/api/hod/submissions');
+        if (!ok) { $('#tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);">Failed.</td></tr>'; return; }
+        if (!data.data.length) {
+          $('#tbody').innerHTML = '<tr><td colspan="5"><div class="empty" style="padding:40px;"><div class="empty-icon">📤</div><h3>No submissions yet</h3></div></td></tr>';
+          return;
+        }
+        $('#tbody').innerHTML = data.data.map(s => {
+          const payload = s.payload || {};
+          let summary = '';
+          if (s.type === 'student') summary = `${esc(payload.full_name || '—')} (${esc(payload.matric_no || '—')})`;
+          else if (s.type === 'lecturer') summary = `${esc(payload.full_name || '—')} (${esc(payload.staff_id || '—')})`;
+          else if (s.type === 'course') summary = `${esc(payload.code || '—')} — ${esc(payload.title || '—')}`;
+
+          return `
+            <tr>
+              <td><span class="badge badge-blue">${esc(s.type)}</span></td>
+              <td>${summary}</td>
+              <td><span class="badge ${STATUS_BADGE[s.status]}">${esc(s.status)}</span></td>
+              <td>${new Date(s.created_at).toLocaleDateString()}</td>
+              <td>${esc(s.reviewer_name || '—')}</td>
+            </tr>`;
+        }).join('');
+      }
+
+      function openSubmit(type) {
+        const bodies = {
+          student: `
+            <div class="field"><label>Full name *</label><input class="input" id="f_full_name" /></div>
+            <div class="field"><label>Email *</label><input class="input" id="f_email" type="email" /></div>
+            <div class="field"><label>Phone</label><input class="input" id="f_phone" /></div>
+            <div class="field"><label>Matric number *</label><input class="input" id="f_matric" /></div>
+            <div class="field-row">
+              <div class="field"><label>Level</label>
+                <select class="select" id="f_level">
+                  <option value="100">100</option><option value="200">200</option>
+                  <option value="300">300</option><option value="400">400</option><option value="500">500</option>
+                </select>
+              </div>
+              <div class="field"><label>Admission year</label><input class="input" id="f_year" type="number" value="${new Date().getFullYear()}" /></div>
+            </div>`,
+          lecturer: `
+            <div class="field"><label>Title</label><input class="input" id="f_title" placeholder="Dr. / Prof." /></div>
+            <div class="field"><label>Full name *</label><input class="input" id="f_full_name" /></div>
+            <div class="field"><label>Email *</label><input class="input" id="f_email" type="email" /></div>
+            <div class="field"><label>Phone</label><input class="input" id="f_phone" /></div>
+            <div class="field"><label>Staff ID *</label><input class="input" id="f_staff_id" /></div>`,
+          course: `
+            <div class="field-row">
+              <div class="field"><label>Code *</label><input class="input" id="f_code" placeholder="CSC401" /></div>
+              <div class="field"><label>Units *</label>
+                <select class="select" id="f_units">
+                  <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option>
+                  <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label>Title *</label><input class="input" id="f_title" /></div>
+            <div class="field-row">
+              <div class="field"><label>Level</label>
+                <select class="select" id="f_level">
+                  <option value="100">100</option><option value="200">200</option>
+                  <option value="300">300</option><option value="400">400</option><option value="500">500</option>
+                </select>
+              </div>
+              <div class="field"><label>Semester</label>
+                <select class="select" id="f_semester">
+                  <option value="First">First</option>
+                  <option value="Second">Second</option>
+                </select>
+              </div>
+            </div>`,
+        };
+
+        openModal({
+          title: `Propose New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+          subtitle: 'Sent to admin for approval',
+          confirmText: 'Submit',
+          body: bodies[type],
+          onConfirm: async (bd, close) => {
+            const payload = {};
+            bd.querySelectorAll('[id^="f_"]').forEach(el => {
+              const key = el.id.replace('f_', '');
+              let val = el.value?.trim() || null;
+              if (['level', 'units', 'year'].includes(key) && val) val = parseInt(val, 10);
+              payload[key] = val;
+            });
+
+            const { ok, data } = await api('/api/hod/submissions', {
+              method: 'POST',
+              body: JSON.stringify({ type, payload }),
+            });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            close();
+            toast('Submission sent to admin');
+            load();
+          },
+        });
+      }
+
+      document.addEventListener('sa:layout-ready', () => {
+        $('#btnNewStudent').addEventListener('click', () => openSubmit('student'));
+        $('#btnNewLecturer').addEventListener('click', () => openSubmit('lecturer'));
+        $('#btnNewCourse').addEventListener('click', () => openSubmit('course'));
+        load();
+      });
+    })();
+  </script>
+</body>
+</html>

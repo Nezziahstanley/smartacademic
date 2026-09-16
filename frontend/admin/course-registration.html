@@ -1,0 +1,458 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Course Registration — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .checkbox-cell {
+      width: 40px;
+      text-align: center;
+    }
+    .checkbox-cell input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+    .bulk-bar {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      background: linear-gradient(135deg, #eef2ff, #ecfeff);
+      border: 1px solid #c7d2fe;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .bulk-bar.active { display: flex; }
+    .bulk-bar .bulk-info {
+      flex: 1;
+      font-size: 14px;
+      color: #3730a3;
+      font-weight: 600;
+    }
+    .bulk-bar .bulk-info strong { color: #312e81; }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Course Registration</h1>
+            <p>Approve or drop student course registrations.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnApproveAllFiltered">✓ Approve All (filtered)</button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+          <select class="select" id="sessionFilter" style="max-width:180px;"><option value="">All sessions</option></select>
+          <select class="select" id="semFilter" style="max-width:160px;"><option value="">All semesters</option></select>
+          <select class="select" id="courseFilter" style="max-width:240px;"><option value="">All courses</option></select>
+          <select class="select" id="statusFilter" style="max-width:150px;">
+            <option value="">All status</option>
+            <option value="registered">Registered</option>
+            <option value="approved">Approved</option>
+            <option value="dropped">Dropped</option>
+          </select>
+          <div class="search"><input type="search" id="searchInput" placeholder="Search by student or matric..." /></div>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <!-- Bulk action bar (appears when rows are selected) -->
+        <div class="bulk-bar" id="bulkBar">
+          <div class="bulk-info">
+            <strong id="bulkCount">0</strong> selected
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnBulkApprove">✓ Approve Selected</button>
+          <button class="btn btn-danger btn-sm" id="btnBulkDrop">✕ Drop Selected</button>
+          <button class="btn btn-ghost btn-sm" id="btnBulkClear">Clear</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="checkbox-cell">
+                  <input type="checkbox" id="checkAll" title="Select all" />
+                </th>
+                <th>Student</th>
+                <th>Matric</th>
+                <th>Course</th>
+                <th>Units</th>
+                <th>Session</th>
+                <th>Semester</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, toast } = window.SACrud;
+
+      const state = {
+        session_id: '',
+        semester_id: '',
+        course_id: '',
+        status: '',
+        search: '',
+        items: [],
+        selected: new Set(), // set of registration IDs
+      };
+
+      /* ============================================================
+         LOOKUPS
+         ============================================================ */
+      async function loadLookups() {
+        const [s, c] = await Promise.all([
+          api('/api/admin/sessions'),
+          api('/api/admin/courses'),
+        ]);
+        if (s.ok) {
+          $('#sessionFilter').innerHTML = '<option value="">All sessions</option>' +
+            s.data.data.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+        }
+        if (c.ok) {
+          $('#courseFilter').innerHTML = '<option value="">All courses</option>' +
+            c.data.data.map(x => `<option value="${x.id}">${esc(x.code)} — ${esc(x.title)}</option>`).join('');
+        }
+      }
+
+      async function loadSemesters(sessionId) {
+        if (!sessionId) {
+          $('#semFilter').innerHTML = '<option value="">All semesters</option>';
+          return;
+        }
+        const { ok, data } = await api('/api/admin/semesters?session_id=' + sessionId);
+        if (ok) {
+          $('#semFilter').innerHTML = '<option value="">All semesters</option>' +
+            data.data.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+        }
+      }
+
+      /* ============================================================
+         LOAD REGISTRATIONS
+         ============================================================ */
+      async function load() {
+        $('#tbody').innerHTML = '<tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>';
+        state.selected.clear();
+        updateBulkBar();
+
+        const p = new URLSearchParams();
+        if (state.session_id)  p.set('session_id', state.session_id);
+        if (state.semester_id) p.set('semester_id', state.semester_id);
+        if (state.course_id)   p.set('course_id', state.course_id);
+        if (state.status)      p.set('status', state.status);
+        if (state.search)      p.set('search', state.search);
+
+        const { ok, data } = await api('/api/admin/registrations?' + p.toString());
+        if (!ok) {
+          $('#tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
+          return;
+        }
+        state.items = data.data;
+        render();
+      }
+
+      /* ============================================================
+         RENDER TABLE
+         ============================================================ */
+      function render() {
+        const body = $('#tbody');
+        if (!state.items.length) {
+          body.innerHTML = `
+            <tr><td colspan="9">
+              <div class="empty" style="padding:40px;">
+                <div class="empty-icon">📝</div>
+                <h3>No registrations found</h3>
+                <p>Try adjusting your filters.</p>
+              </div>
+            </td></tr>`;
+          return;
+        }
+
+        const statusBadge = (s) => ({
+          registered: 'badge-blue',
+          approved:   'badge-green',
+          dropped:    'badge-red',
+        }[s] || 'badge-gray');
+
+        body.innerHTML = state.items.map(r => {
+          // Direct actions based on status
+          let actions = '';
+          if (r.status === 'registered') {
+            actions = `
+              <button class="btn btn-primary btn-sm" data-approve="${r.id}" title="Approve">✓ Approve</button>
+              <button class="btn btn-danger btn-sm" data-drop="${r.id}" title="Drop">✕ Drop</button>`;
+          } else if (r.status === 'approved') {
+            actions = `
+              <button class="btn btn-ghost btn-sm" data-drop="${r.id}" title="Drop">✕ Drop</button>`;
+          } else if (r.status === 'dropped') {
+            actions = `
+              <button class="btn btn-ghost btn-sm" data-approve="${r.id}" title="Restore">↺ Restore</button>`;
+          }
+
+          // Checkbox disabled for already-final states? No — allow reselect
+          const isChecked = state.selected.has(r.id) ? 'checked' : '';
+
+          return `
+            <tr>
+              <td class="checkbox-cell">
+                <input type="checkbox" data-select="${r.id}" ${isChecked} />
+              </td>
+              <td><div style="font-weight:600;">${esc(r.student_name)}</div></td>
+              <td>${esc(r.matric_no)}</td>
+              <td><strong>${esc(r.code)}</strong> — ${esc(r.title)}</td>
+              <td>${r.units}u</td>
+              <td>${esc(r.session_name)}</td>
+              <td>${esc(r.semester_name)}</td>
+              <td><span class="badge ${statusBadge(r.status)}">${esc(r.status)}</span></td>
+              <td>
+                <div class="actions">${actions}</div>
+              </td>
+            </tr>`;
+        }).join('');
+
+        // Wire checkboxes
+        body.querySelectorAll('[data-select]').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const id = parseInt(cb.dataset.select, 10);
+            if (cb.checked) state.selected.add(id);
+            else            state.selected.delete(id);
+            updateBulkBar();
+            updateCheckAll();
+          });
+        });
+
+        // Wire action buttons
+        body.querySelectorAll('[data-approve]').forEach(b =>
+          b.addEventListener('click', () => doApprove(parseInt(b.dataset.approve, 10))));
+        body.querySelectorAll('[data-drop]').forEach(b =>
+          b.addEventListener('click', () => doDrop(parseInt(b.dataset.drop, 10))));
+
+        updateCheckAll();
+      }
+
+      /* ============================================================
+         SINGLE ACTIONS
+         ============================================================ */
+      async function doApprove(id) {
+        const { ok, data } = await api('/api/admin/registrations/' + id + '/approve', { method: 'POST' });
+        if (!ok) { alert(data?.error || 'Failed'); return; }
+        toast('✅ Registration approved');
+        load();
+      }
+
+      async function doDrop(id) {
+        openModal({
+          title: 'Drop this registration?',
+          size: 'sm',
+          confirmText: 'Drop',
+          body: '<p>The student will need to re-register if they want to take this course again.</p>',
+          onConfirm: async (_b, close) => {
+            const { ok, data } = await api('/api/admin/registrations/' + id + '/drop', { method: 'POST' });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            close();
+            toast('Registration dropped');
+            load();
+          },
+        });
+      }
+
+      /* ============================================================
+         BULK ACTIONS
+         ============================================================ */
+      function updateBulkBar() {
+        const bar = $('#bulkBar');
+        const count = state.selected.size;
+        $('#bulkCount').textContent = count;
+        if (count > 0) bar.classList.add('active');
+        else           bar.classList.remove('active');
+      }
+
+      function updateCheckAll() {
+        const checkAll = $('#checkAll');
+        const allIds = state.items.map(r => r.id);
+        const allSelected = allIds.length > 0 && allIds.every(id => state.selected.has(id));
+        const anySelected = allIds.some(id => state.selected.has(id));
+        checkAll.checked = allSelected;
+        checkAll.indeterminate = !allSelected && anySelected;
+      }
+
+      async function bulkApprove() {
+        const ids = Array.from(state.selected);
+        if (!ids.length) { toast('Nothing selected'); return; }
+
+        openModal({
+          title: 'Approve ' + ids.length + ' registration(s)?',
+          size: 'sm',
+          confirmText: 'Approve All',
+          body: `<p>All selected registrations will be marked <strong>approved</strong>.</p>`,
+          onConfirm: async (_b, close) => {
+            let success = 0, fail = 0;
+            for (const id of ids) {
+              const { ok } = await api('/api/admin/registrations/' + id + '/approve', { method: 'POST' });
+              if (ok) success++; else fail++;
+            }
+            close();
+            toast(`✅ Approved: ${success}${fail ? ', failed: ' + fail : ''}`);
+            load();
+          },
+        });
+      }
+
+      async function bulkDrop() {
+        const ids = Array.from(state.selected);
+        if (!ids.length) { toast('Nothing selected'); return; }
+
+        openModal({
+          title: 'Drop ' + ids.length + ' registration(s)?',
+          size: 'sm',
+          confirmText: 'Drop All',
+          body: `<p style="color:var(--red);">This will <strong>drop</strong> all selected registrations. Students will need to re-register.</p>`,
+          onConfirm: async (_b, close) => {
+            let success = 0, fail = 0;
+            for (const id of ids) {
+              const { ok } = await api('/api/admin/registrations/' + id + '/drop', { method: 'POST' });
+              if (ok) success++; else fail++;
+            }
+            close();
+            toast(`Dropped: ${success}${fail ? ', failed: ' + fail : ''}`);
+            load();
+          },
+        });
+      }
+
+      async function approveAllFiltered() {
+        // Approve every 'registered' registration currently loaded
+        const ids = state.items.filter(r => r.status === 'registered').map(r => r.id);
+        if (!ids.length) {
+          toast('No "registered" rows to approve');
+          return;
+        }
+
+        openModal({
+          title: 'Approve all filtered registrations?',
+          size: 'sm',
+          confirmText: 'Approve ' + ids.length,
+          body: `
+            <p>This will approve <strong>${ids.length}</strong> registration(s) that are currently <code>registered</code>.</p>
+            <p style="font-size:13px;color:var(--ink-3);margin-top:8px;">
+              Rows already approved or dropped are skipped.
+            </p>
+          `,
+          onConfirm: async (_b, close) => {
+            let success = 0, fail = 0;
+            for (const id of ids) {
+              const { ok } = await api('/api/admin/registrations/' + id + '/approve', { method: 'POST' });
+              if (ok) success++; else fail++;
+            }
+            close();
+            toast(`✅ Approved: ${success}${fail ? ', failed: ' + fail : ''}`);
+            load();
+          },
+        });
+      }
+
+      /* ============================================================
+         FILTERS
+         ============================================================ */
+      function bindFilters() {
+        $('#sessionFilter').addEventListener('change', async (e) => {
+          state.session_id = e.target.value;
+          await loadSemesters(state.session_id);
+          load();
+        });
+        $('#semFilter').addEventListener('change', e => { state.semester_id = e.target.value; load(); });
+        $('#courseFilter').addEventListener('change', e => { state.course_id = e.target.value; load(); });
+        $('#statusFilter').addEventListener('change', e => { state.status = e.target.value; load(); });
+
+        let t;
+        $('#searchInput').addEventListener('input', e => {
+          clearTimeout(t);
+          t = setTimeout(() => { state.search = e.target.value.trim(); load(); }, 300);
+        });
+
+        $('#btnReset').addEventListener('click', () => {
+          state.session_id = '';
+          state.semester_id = '';
+          state.course_id = '';
+          state.status = '';
+          state.search = '';
+          $('#sessionFilter').value = '';
+          $('#semFilter').value = '';
+          $('#courseFilter').value = '';
+          $('#statusFilter').value = '';
+          $('#searchInput').value = '';
+          load();
+        });
+
+        // Select all checkbox
+        $('#checkAll').addEventListener('change', (e) => {
+          if (e.target.checked) {
+            state.items.forEach(r => state.selected.add(r.id));
+          } else {
+            state.selected.clear();
+          }
+          // Update row checkboxes
+          $('#tbody').querySelectorAll('[data-select]').forEach(cb => {
+            cb.checked = state.selected.has(parseInt(cb.dataset.select, 10));
+          });
+          updateBulkBar();
+        });
+
+        // Bulk buttons
+        $('#btnBulkApprove').addEventListener('click', bulkApprove);
+        $('#btnBulkDrop').addEventListener('click', bulkDrop);
+        $('#btnBulkClear').addEventListener('click', () => {
+          state.selected.clear();
+          $('#tbody').querySelectorAll('[data-select]').forEach(cb => cb.checked = false);
+          updateBulkBar();
+          updateCheckAll();
+        });
+
+        // Approve all filtered
+        $('#btnApproveAllFiltered').addEventListener('click', approveAllFiltered);
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      document.addEventListener('sa:layout-ready', async () => {
+        await loadLookups();
+        bindFilters();
+        load();
+      });
+    })();
+  </script>
+</body>
+</html>

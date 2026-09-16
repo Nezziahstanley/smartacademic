@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPA / CGPA — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>GPA / CGPA</h1><p>Your academic summary.</p></div></div>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon primary">📈</div><div class="stat-body"><div class="stat-value" id="sGpa">—</div><div class="stat-label">Current GPA</div></div></div>
+          <div class="stat"><div class="stat-icon accent">🎯</div><div class="stat-body"><div class="stat-value" id="sCgpa">—</div><div class="stat-label">CGPA</div></div></div>
+          <div class="stat"><div class="stat-icon green">📚</div><div class="stat-body"><div class="stat-value" id="sUnits">—</div><div class="stat-label">Total Units</div></div></div>
+          <div class="stat"><div class="stat-icon red">✕</div><div class="stat-body"><div class="stat-value" id="sFailed">—</div><div class="stat-label">Failed Courses</div></div></div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-header"><div><h3>Semester GPA Trend</h3></div></div>
+          <div class="chart-wrap"><canvas id="gpaChart"></canvas></div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api } = window.SACrud;
+      const { ok, data } = await api('/api/student/gpa-cgpa');
+      if (!ok) return;
+      const s = data.data.summary;
+      document.getElementById('sGpa').textContent = (s.gpa || 0).toFixed(2);
+      document.getElementById('sCgpa').textContent = (s.cgpa || 0).toFixed(2);
+      document.getElementById('sUnits').textContent = s.totalUnits;
+      document.getElementById('sFailed').textContent = s.failedCourses;
+
+      const canvas = document.getElementById('gpaChart');
+      const trend = s.trend || [];
+      if (!trend.length) { canvas.parentElement.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">📈</div><h3>Not enough data yet</h3></div>'; return; }
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: trend.map(t => `S${t.session_id} ${t.semester_id === 1 ? 'First' : 'Second'}`),
+          datasets: [{ label: 'GPA', data: trend.map(t => t.gpa), borderColor: '#166534', backgroundColor: 'rgba(22,101,52,.1)', fill: true, tension: 0.35, borderWidth: 3 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 5, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } },
+      });
+    });
+  </script>
+</body>
+</html>

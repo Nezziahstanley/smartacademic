@@ -1,0 +1,78 @@
+﻿<!-- ============================================================
+     SMARTACADEMIC — Topbar (loaded into #topbarSlot)
+     ============================================================ -->
+
+<header class="topbar">
+
+  <!-- Hamburger / sidebar toggle -->
+  <button class="tb-hamburger" data-toggle-sidebar aria-label="Toggle sidebar">
+    <span></span><span></span><span></span>
+  </button>
+
+  <!-- Search (cosmetic) -->
+  <div class="tb-search">
+    <input type="search" placeholder="Search students, courses, interventions..." />
+  </div>
+
+  <div class="tb-spacer"></div>
+
+  <div class="tb-actions">
+
+    <!-- Notifications -->
+    <button class="tb-btn" data-toggle-notifs aria-label="Notifications">
+      🔔
+      <span class="tb-badge" data-notif-badge data-count="0"></span>
+    </button>
+
+    <!-- Profile -->
+    <div class="profile">
+      <button class="profile-btn" type="button">
+        <span class="profile-avatar" data-user-avatar>?</span>
+        <span class="profile-meta">
+          <span class="profile-name" data-user-name>Loading...</span>
+          <span class="profile-role" data-user-role>—</span>
+        </span>
+        <span class="profile-caret">▼</span>
+      </button>
+
+      <div class="profile-menu">
+        <div class="pm-header">
+          <strong data-user-name>Loading...</strong>
+          <span data-user-email>—</span>
+        </div>
+
+        <a class="pm-item" href="#" data-profile-link>
+          <span class="pm-ico">👤</span> My Profile
+        </a>
+        <a class="pm-item" href="#" data-settings-link>
+          <span class="pm-ico">⚙️</span> Account Settings
+        </a>
+        <a class="pm-item" href="#" data-help-link>
+          <span class="pm-ico">❓</span> Help &amp; Support
+        </a>
+
+        <div class="pm-divider"></div>
+
+        <button class="pm-item danger" type="button" data-logout>
+          <span class="pm-ico">🚪</span> Logout
+        </button>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<!-- Notification panel (fixed position, opened by bell) -->
+<div class="notif-panel" id="notifPanel">
+  <div class="np-head">
+    <h4>Notifications</h4>
+    <button type="button" data-mark-all-read>Mark all as read</button>
+  </div>
+  <div class="np-list">
+    <div class="empty" style="padding: 40px 20px;">
+      <div class="empty-icon">🔔</div>
+      <h3>No notifications</h3>
+      <p>You're all caught up.</p>
+    </div>
+  </div>
+</div>

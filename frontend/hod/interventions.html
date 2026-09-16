@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interventions — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Interventions</h1><p>Student support interventions in your department.</p></div></div>
+
+        <div class="filters">
+          <select class="select" id="statusFilter" style="max-width:180px;">
+            <option value="">All status</option>
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="Closed">Closed</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th>Student</th><th>Title</th><th>Type</th><th>Assigned</th>
+              <th>Priority</th><th>Status</th><th style="text-align:right;">Actions</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/hod/interventions.js"></script>
+</body>
+</html>

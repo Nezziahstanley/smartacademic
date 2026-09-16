@@ -1,0 +1,47 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Attendance Overview</h1><p>Attendance health across your department.</p></div></div>
+
+        <div class="card mb-4">
+          <div class="card-header"><div><h3>By Course</h3></div></div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead><tr><th>Course</th><th>Total</th><th>Present</th><th>Percent</th></tr></thead>
+              <tbody id="courseBody"><tr><td colspan="4"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><h3>Low Attendance Students</h3><p>Below 75%</p></div></div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead><tr><th>Student</th><th>Matric</th><th>Total</th><th>Present</th><th>Percent</th></tr></thead>
+              <tbody id="studentBody"><tr><td colspan="5"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/hod/attendance.js"></script>
+</body>
+</html>

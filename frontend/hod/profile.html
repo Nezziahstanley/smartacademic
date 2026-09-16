@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Profile — SMARTACADEMIC HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>My Profile</h1>
+            <p>View and edit your account details.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Profile Card -->
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Profile Information</h3></div>
+            </div>
+            <div id="profileCard">
+              <div class="skeleton" style="height: 150px;"></div>
+            </div>
+          </div>
+
+          <!-- Change Password -->
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Change Password</h3><p>Use a strong password.</p></div>
+            </div>
+            <div class="msg" id="pwMsg"></div>
+            <form id="pwForm">
+              <div class="field">
+                <label>Current password *</label>
+                <input class="input" id="pwCurrent" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field">
+                <label>New password *</label>
+                <input class="input" id="pwNew" type="password" autocomplete="new-password" required />
+              </div>
+              <div class="field">
+                <label>Confirm new password *</label>
+                <input class="input" id="pwConfirm" type="password" autocomplete="new-password" required />
+              </div>
+              <button type="submit" class="btn btn-primary w-full" id="pwBtn">Change Password</button>
+            </form>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, toast, openModal } = window.SACrud;
+
+      let profile = null;
+      let userData = null;
+
+      async function load() {
+        const { ok, data } = await api('/api/auth/me');
+        if (!ok) {
+          $('#profileCard').innerHTML = '<p style="color:var(--red)">Failed to load.</p>';
+          return;
+        }
+
+        userData = data.data.user;
+        profile = data.data.profile; // HOD profile has department info
+
+        const initials = userData.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+        $('#profileCard').innerHTML = `
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+            <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#166534,#ca8a04);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;">
+              ${initials}
+            </div>
+            <div>
+              <div style="font-size:18px;font-weight:800;">${esc(userData.full_name)}</div>
+              <div style="color:var(--ink-3);font-size:13px;">${esc(userData.email)}</div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap:16px;">
+            <div><div style="font-size:12px;color:var(--ink-3);">Role</div><strong>Head of Department</strong></div>
+            <div><div style="font-size:12px;color:var(--ink-3);">Department</div><strong>${esc(profile?.department_name || '—')}</strong></div>
+            <div><div style="font-size:12px;color:var(--ink-3);">Phone</div><strong>${esc(userData.phone || '—')}</strong></div>
+            <div><div style="font-size:12px;color:var(--ink-3);">Account Status</div><strong>${userData.is_active ? 'Active' : 'Inactive'}</strong></div>
+          </div>
+
+          <button class="btn btn-ghost w-full mt-4" id="btnEdit">✏️ Edit Profile</button>
+        `;
+
+        $('#btnEdit').addEventListener('click', openEdit);
+      }
+
+      function openEdit() {
+        openModal({
+          title: 'Edit Profile',
+          confirmText: 'Save Changes',
+          body: `
+            <div class="field"><label>Full Name</label><input class="input" id="f_name" value="${esc(userData.full_name)}" /></div>
+            <div class="field"><label>Email (cannot change)</label><input class="input" value="${esc(userData.email)}" disabled /></div>
+            <div class="field"><label>Phone</label><input class="input" id="f_phone" value="${esc(userData.phone || '')}" /></div>
+          `,
+          onConfirm: async (bd, close) => {
+            const payload = {
+              full_name: bd.querySelector('#f_name').value.trim(),
+              phone: bd.querySelector('#f_phone').value.trim() || null,
+            };
+            const { ok, data } = await api('/api/hod/profile', {
+              method: 'PUT',
+              body: JSON.stringify(payload),
+            });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            close();
+            toast('Profile updated');
+            load();
+          },
+        });
+      }
+
+      // Change password
+      $('#pwForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = $('#pwMsg');
+        msg.className = 'msg';
+
+        const current_password = $('#pwCurrent').value;
+        const new_password = $('#pwNew').value;
+        const confirm = $('#pwConfirm').value;
+
+        if (new_password.length < 6) {
+          msg.className = 'msg msg-error show';
+          msg.textContent = 'New password must be at least 6 characters.';
+          return;
+        }
+        if (new_password !== confirm) {
+          msg.className = 'msg msg-error show';
+          msg.textContent = 'Passwords do not match.';
+          return;
+        }
+
+        const btn = $('#pwBtn');
+        btn.disabled = true;
+        try {
+          const { ok, data } = await api('/api/hod/change-password', {
+            method: 'POST',
+            body: JSON.stringify({ current_password, new_password }),
+          });
+          if (!ok) {
+            msg.className = 'msg msg-error show';
+            msg.textContent = data?.error || 'Failed';
+            return;
+          }
+          msg.className = 'msg msg-success show';
+          msg.textContent = '✅ Password changed successfully.';
+          $('#pwForm').reset();
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      document.addEventListener('sa:layout-ready', load);
+    })();
+  </script>
+</body>
+</html>

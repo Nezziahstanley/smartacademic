@@ -1,0 +1,52 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Risk Monitoring — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Risk Monitoring</h1><p>At-risk students in your department.</p></div></div>
+
+        <div class="filters">
+          <select class="select" id="catFilter" style="max-width:180px;">
+            <option value="">All categories</option>
+            <option value="GREEN">GREEN</option><option value="YELLOW">YELLOW</option>
+            <option value="ORANGE">ORANGE</option><option value="RED">RED</option>
+          </select>
+          <select class="select" id="levelFilter" style="max-width:160px;">
+            <option value="">All levels</option>
+            <option value="100">100</option><option value="200">200</option>
+            <option value="300">300</option><option value="400">400</option><option value="500">500</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th>Student</th><th>Matric</th><th>Level</th>
+              <th>Category</th><th>Score</th><th>Attend%</th><th>GPA</th>
+              <th style="text-align:right;">Actions</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/hod/risk.js"></script>
+</body>
+</html>

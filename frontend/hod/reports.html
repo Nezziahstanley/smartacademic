@@ -1,0 +1,60 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — HOD</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Department Reports</h1><p>Analytics for your department.</p></div></div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div><h3>Performance by Level</h3></div></div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead><tr><th>Level</th><th>Students</th><th>Avg GPA</th></tr></thead>
+                <tbody id="levelBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><h3>Most Failed Courses</h3></div></div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead><tr><th>Course</th><th>Failures</th></tr></thead>
+                <tbody id="failBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/hod/performance');
+      if (!ok) return;
+      document.getElementById('levelBody').innerHTML = data.data.byLevel.map(l => `
+        <tr><td><strong>Level ${l.level}</strong></td><td>${l.students}</td><td><strong>${l.avg_gpa || '—'}</strong></td></tr>
+      `).join('');
+      document.getElementById('failBody').innerHTML = data.data.failedCourses.map(f => `
+        <tr><td>${esc(f.code)} — ${esc(f.title)}</td><td><span class="badge badge-red">${f.failures}</span></td></tr>
+      `).join('');
+    });
+  </script>
+</body>
+</html>

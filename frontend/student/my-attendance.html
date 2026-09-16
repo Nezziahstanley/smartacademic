@@ -1,0 +1,67 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Attendance — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>My Attendance</h1><p>Attendance per course.</p></div></div>
+
+        <div class="card mb-4">
+          <div class="card-header"><div><h3>By Course</h3></div></div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead><tr><th>Course</th><th>Present</th><th>Absent</th><th>Excused</th><th>Total</th><th>Percent</th></tr></thead>
+              <tbody id="courseBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><h3>Recent Sessions</h3></div></div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead><tr><th>Date</th><th>Course</th><th>Topic</th><th>Status</th></tr></thead>
+              <tbody id="recBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/student/attendance');
+      if (!ok) return;
+      const badge = p => p >= 75 ? 'green' : p >= 50 ? 'yellow' : 'red';
+      document.getElementById('courseBody').innerHTML = data.data.byCourse.map(c => `
+        <tr>
+          <td><strong>${esc(c.code)}</strong> ${esc(c.title)}</td>
+          <td>${c.present}</td><td>${c.absent}</td><td>${c.excused}</td><td>${c.total}</td>
+          <td><span class="badge badge-${badge(c.pct || 0)}">${c.pct || 0}%</span></td>
+        </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">No records yet</td></tr>';
+      document.getElementById('recBody').innerHTML = data.data.records.slice(0, 30).map(r => `
+        <tr>
+          <td>${new Date(r.session_date).toLocaleDateString()}</td>
+          <td>${esc(r.code)}</td>
+          <td>${esc(r.topic || '—')}</td>
+          <td><span class="badge badge-${r.status === 'present' ? 'green' : r.status === 'absent' ? 'red' : 'yellow'}">${esc(r.status)}</span></td>
+        </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">No records yet</td></tr>';
+    });
+  </script>
+</body>
+</html>

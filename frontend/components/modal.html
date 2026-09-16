@@ -1,0 +1,25 @@
+<!-- ============================================================
+     SMARTACADEMIC — Reusable modal shell
+     Pages clone this structure with a unique id.
+     ============================================================ -->
+
+<template id="modalTemplate">
+  <div class="modal-backdrop" data-modal>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div>
+          <h3 data-modal-title>Modal Title</h3>
+          <p data-modal-subtitle></p>
+        </div>
+        <button class="modal-close" type="button" data-modal-close aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" data-modal-body>
+        <!-- content injected here -->
+      </div>
+      <div class="modal-foot" data-modal-foot>
+        <button type="button" class="btn btn-ghost" data-modal-close>Cancel</button>
+        <button type="button" class="btn btn-primary" data-modal-confirm>Save</button>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,160 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — SMARTACADEMIC Lecturer</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Reports</h1>
+            <p>Analytics for your courses and students.</p>
+          </div>
+        </div>
+
+        <!-- Course Performance -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <div><h3>Course Performance</h3><p>Average score per course</p></div>
+          </div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Students</th>
+                  <th>Avg Score</th>
+                  <th>Highest</th>
+                  <th>Lowest</th>
+                  <th>Pass Rate</th>
+                </tr>
+              </thead>
+              <tbody id="coursePerfBody">
+                <tr><td colspan="6"><div class="skeleton" style="height:22px;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Attendance Summary -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Attendance Report</h3><p>Per-student attendance in your courses</p></div>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;max-height:500px;overflow-y:auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Matric</th>
+                    <th style="text-align:right;">Attend%</th>
+                  </tr>
+                </thead>
+                <tbody id="attendanceBody">
+                  <tr><td colspan="3"><div class="skeleton" style="height:22px;"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Grade Distribution</h3><p>Across all your courses</p></div>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead>
+                  <tr><th>Grade</th><th style="text-align:right;">Count</th></tr>
+                </thead>
+                <tbody id="gradeBody">
+                  <tr><td colspan="2"><div class="skeleton" style="height:22px;"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc } = window.SACrud;
+
+      async function loadCoursePerformance() {
+        const { ok, data } = await api('/api/lecturer/reports/course-performance');
+        const body = $('#coursePerfBody');
+        if (!ok || !data.data.length) {
+          body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--ink-3);">No performance data yet.</td></tr>';
+          return;
+        }
+        body.innerHTML = data.data.map(r => `
+          <tr>
+            <td><strong>${esc(r.code)}</strong> — ${esc(r.title)}</td>
+            <td>${r.student_count}</td>
+            <td><strong>${r.avg_score || '—'}</strong></td>
+            <td>${r.max_score || '—'}</td>
+            <td>${r.min_score || '—'}</td>
+            <td><span class="badge badge-${(r.pass_rate || 0) >= 70 ? 'green' : (r.pass_rate || 0) >= 50 ? 'yellow' : 'red'}">${r.pass_rate || 0}%</span></td>
+          </tr>`).join('');
+      }
+
+      async function loadAttendance() {
+        const { ok, data } = await api('/api/lecturer/reports/attendance');
+        const body = $('#attendanceBody');
+        if (!ok || !data.data.length) {
+          body.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--ink-3);">No attendance data.</td></tr>';
+          return;
+        }
+        body.innerHTML = data.data.slice(0, 50).map(r => `
+          <tr>
+            <td>${esc(r.full_name)}</td>
+            <td>${esc(r.matric_no)}</td>
+            <td style="text-align:right;">
+              <span class="badge badge-${(r.pct || 0) >= 75 ? 'green' : (r.pct || 0) >= 50 ? 'yellow' : 'red'}">${r.pct || 0}%</span>
+            </td>
+          </tr>`).join('');
+      }
+
+      async function loadGradeDistribution() {
+        const { ok, data } = await api('/api/lecturer/reports/grade-distribution');
+        const body = $('#gradeBody');
+        if (!ok || !data.data.length) {
+          body.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:30px;color:var(--ink-3);">No grades recorded.</td></tr>';
+          return;
+        }
+        const gradeColor = g => ({ A: 'green', B: 'blue', C: 'blue', D: 'yellow', E: 'yellow', F: 'red' }[g] || 'gray');
+        body.innerHTML = data.data.map(r => `
+          <tr>
+            <td><span class="badge badge-${gradeColor(r.grade)}">${esc(r.grade)}</span></td>
+            <td style="text-align:right;"><strong>${r.count}</strong></td>
+          </tr>`).join('');
+      }
+
+      document.addEventListener('sa:layout-ready', () => {
+        loadCoursePerformance();
+        loadAttendance();
+        loadGradeDistribution();
+      });
+    })();
+  </script>
+</body>
+</html>

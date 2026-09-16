@@ -1,0 +1,288 @@
+﻿/* ============================================================
+   SMARTACADEMIC — Dashboard charts, modals, filters
+   ============================================================ */
+
+/* ---------- Chart containers ---------- */
+.chart-card {
+  position: relative;
+  min-height: 260px;
+}
+
+.chart-wrap {
+  position: relative;
+  height: 240px;
+}
+
+.chart-wrap.sm { height: 180px; }
+.chart-wrap.lg { height: 320px; }
+
+/* ---------- Legend list ---------- */
+.legend-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+}
+
+.legend-item .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+}
+
+.legend-color {
+  width: 10px; height: 10px;
+  border-radius: 3px;
+}
+
+.legend-value {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ---------- Activity feed ---------- */
+.activity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-item:last-child { border-bottom: none; }
+
+.activity-ico {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  background: var(--primary-50);
+  color: var(--primary);
+  display: grid; place-items: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.activity-body {
+  min-width: 0;
+  flex: 1;
+}
+.activity-body strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+.activity-body p {
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+.activity-time {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ---------- Filters bar ---------- */
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+}
+
+.filters .input,
+.filters .select {
+  padding: 8px 12px;
+  font-size: 13.5px;
+}
+
+.filters .search {
+  flex: 1;
+  min-width: 220px;
+  position: relative;
+}
+
+.filters .search input {
+  padding-left: 34px;
+}
+
+.filters .search::before {
+  content: "🔍";
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  opacity: .5;
+  pointer-events: none;
+}
+
+/* ---------- Pagination ---------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+  flex-wrap: wrap;
+}
+
+.pagination .pages {
+  display: flex;
+  gap: 4px;
+}
+
+.pagination button {
+  min-width: 34px; height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-2);
+  transition: .15s;
+}
+
+.pagination button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.pagination button.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.pagination button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,.55);
+  backdrop-filter: blur(4px);
+  display: none;
+  z-index: 200;
+  padding: 20px;
+  overflow-y: auto;
+}
+.modal-backdrop.open {
+  display: grid;
+  place-items: center;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  animation: modalIn .2s ease-out;
+}
+
+.modal.lg { max-width: 720px; }
+.modal.sm { max-width: 400px; }
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(-12px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modal-head h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.modal-head p {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.modal-close {
+  width: 34px; height: 34px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ink-3);
+  display: grid; place-items: center;
+}
+.modal-close:hover { background: var(--bg); color: var(--ink); }
+
+.modal-body {
+  padding: 22px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-foot {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  background: #fafbfd;
+  border-radius: 0 0 14px 14px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   RIPPLE + SKELETON
+   ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: sk 1.4s ease-in-out infinite;
+  border-radius: 6px;
+  height: 16px;
+}
+@keyframes sk {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 900px) {
+  .chart-wrap { height: 200px; }
+  .filters { padding: 12px; }
+  .filters .search { min-width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .modal { max-width: 100%; }
+  .modal-foot { flex-direction: column-reverse; }
+  .modal-foot .btn { width: 100%; }
+}

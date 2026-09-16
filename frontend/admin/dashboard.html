@@ -1,0 +1,177 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+
+    <div class="main">
+      <div id="topbarSlot"></div>
+
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Admin Dashboard</h1>
+            <p>System-wide overview of students, courses, risk, and interventions.</p>
+          </div>
+          <div class="page-actions">
+            <a href="/admin/reports.html" class="btn btn-ghost">📄 Reports</a>
+            <a href="/admin/users.html" class="btn btn-primary">+ Manage Users</a>
+          </div>
+        </div>
+
+        <!-- KPI STATS -->
+        <div class="stat-grid" id="statGrid">
+          <div class="stat">
+            <div class="stat-icon primary">🎓</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statStudents">—</div>
+              <div class="stat-label">Total Students</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon accent">👨‍🏫</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statLecturers">—</div>
+              <div class="stat-label">Lecturers</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon primary">📖</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statCourses">—</div>
+              <div class="stat-label">Courses</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon accent">📈</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statGpa">—</div>
+              <div class="stat-label">Avg GPA</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RISK SUMMARY -->
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-icon green">✓</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statGreen">—</div>
+              <div class="stat-label">Good Standing</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon yellow">!</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statYellow">—</div>
+              <div class="stat-label">Needs Attention</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon orange">⚠</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statOrange">—</div>
+              <div class="stat-label">High Risk</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon red">✕</div>
+            <div class="stat-body">
+              <div class="stat-value" id="statRed">—</div>
+              <div class="stat-label">Critical</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHARTS ROW -->
+        <div class="grid-2-1 mb-4">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div>
+                <h3>Attendance Trend</h3>
+                <p>Average attendance over the last 8 weeks</p>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="attendanceChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-header">
+              <div>
+                <h3>Risk Distribution</h3>
+                <p>Current risk levels</p>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="riskChart"></canvas>
+            </div>
+            <ul class="legend-list" id="riskLegend"></ul>
+          </div>
+        </div>
+
+        <!-- ACTIVITY + HIGH RISK -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Recent Activity</h3>
+                <p>Latest actions across the system</p>
+              </div>
+            </div>
+            <ul class="activity-list" id="activityList">
+              <li class="skeleton" style="height: 60px; margin-bottom: 10px;"></li>
+              <li class="skeleton" style="height: 60px; margin-bottom: 10px;"></li>
+              <li class="skeleton" style="height: 60px;"></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Top At-Risk Students</h3>
+                <p>Students requiring immediate attention</p>
+              </div>
+              <a href="/admin/risk-monitoring.html" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <div class="table-wrap" style="box-shadow: none; border: none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Risk</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody id="highRiskBody">
+                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/dashboard.js"></script>
+</body>
+</html>

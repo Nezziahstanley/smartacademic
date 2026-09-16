@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Student — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/public-home.css" />
+  <style>
+    body { background: #f5f7fb; min-height: 100vh; }
+    .verify-shell {
+      max-width: 480px; margin: 40px auto; padding: 0 20px;
+    }
+    .verify-card {
+      background: #fff; border-radius: 16px; padding: 32px;
+      box-shadow: 0 10px 30px rgba(15,23,42,.08);
+    }
+    .verify-logo {
+      text-align: center; margin-bottom: 24px;
+    }
+    .verify-logo .brand-mark {
+      display: inline-grid; place-items: center;
+      width: 48px; height: 48px; border-radius: 12px;
+      background: linear-gradient(135deg, #166534, #ca8a04);
+      color: #fff; font-weight: 800; font-size: 22px;
+      margin-bottom: 8px;
+    }
+    .verify-logo h1 { font-size: 20px; margin: 0; }
+    .verify-logo p { font-size: 13px; color: #64748b; margin: 4px 0 0; }
+  </style>
+</head>
+<body>
+
+  <div class="verify-shell">
+    <div class="verify-card">
+      <div class="verify-logo">
+        <div class="brand-mark">S</div>
+        <h1>SMARTACADEMIC</h1>
+        <p>Student ID Verification</p>
+      </div>
+      <div id="result">
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:32px;margin-bottom:10px;">🔍</div>
+          <p style="color:#64748b;">Looking up student...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+    (async function () {
+      const matric = new URLSearchParams(location.search).get('matric');
+      const out = document.getElementById('result');
+
+      if (!matric) {
+        out.innerHTML = `
+          <div style="text-align:center;padding:20px 0;">
+            <div style="font-size:32px;color:#dc2626;margin-bottom:10px;">⚠</div>
+            <h2 style="font-size:16px;color:#991b1b;">No matric number provided</h2>
+            <p style="color:#64748b;font-size:14px;">Scan a valid SMARTACADEMIC ID card barcode.</p>
+          </div>`;
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/public/verify/' + encodeURIComponent(matric));
+        if (!res.ok) {
+          out.innerHTML = `
+            <div style="text-align:center;padding:20px 0;">
+              <div style="font-size:32px;color:#dc2626;margin-bottom:10px;">✕</div>
+              <h2 style="font-size:16px;color:#991b1b;">Student not found</h2>
+              <p style="color:#64748b;font-size:14px;">Matric number <strong>${matric}</strong> is not registered.</p>
+            </div>`;
+          return;
+        }
+        const data = await res.json();
+        const s = data.data;
+        const initials = s.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+        out.innerHTML = `
+          <div style="text-align:center;margin-bottom:20px;">
+            <div style="width:80px;height:96px;margin:0 auto 12px;border-radius:10px;background:linear-gradient(135deg,#166534,#ca8a04);display:grid;place-items:center;color:#fff;font-size:26px;font-weight:800;${s.photo_url ? `background-image:url('${s.photo_url}');background-size:cover;` : ''}">
+              ${s.photo_url ? '' : initials}
+            </div>
+            <div style="display:inline-block;background:#dcfce7;color:#166534;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;">
+              ✓ Verified Student
+            </div>
+          </div>
+          <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
+            <div style="margin-bottom:12px;"><div style="font-size:12px;color:#64748b;">Full Name</div><strong>${s.full_name}</strong></div>
+            <div style="margin-bottom:12px;"><div style="font-size:12px;color:#64748b;">Matric Number</div><strong>${s.matric_no}</strong></div>
+            <div style="margin-bottom:12px;"><div style="font-size:12px;color:#64748b;">Department</div><strong>${s.department_name}</strong></div>
+            <div style="margin-bottom:12px;"><div style="font-size:12px;color:#64748b;">Programme</div><strong>${s.programme_name}</strong></div>
+            <div style="margin-bottom:12px;"><div style="font-size:12px;color:#64748b;">Level</div><strong>Level ${s.level}</strong></div>
+            <div><div style="font-size:12px;color:#64748b;">Institution</div><strong>SMARTACADEMIC University</strong></div>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#94a3b8;text-align:center;">
+            If you found this ID, please return it to the institution's student affairs office.<br>
+            📞 0901 616 2662 · 📧 chosenmopol2003@gmail.com
+          </p>
+        `;
+      } catch (e) {
+        out.innerHTML = '<p style="text-align:center;color:#dc2626;">Verification failed. Try again.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>

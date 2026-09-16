@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interventions — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>My Interventions</h1><p>Support actions assigned to you.</p></div></div>
+        <div id="list"><div class="skeleton" style="height:100px;"></div></div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/student/interventions');
+      if (!ok) return;
+      if (!data.data.length) {
+        document.getElementById('list').innerHTML = '<div class="card"><div class="empty" style="padding:40px;"><div class="empty-icon">🎉</div><h3>No interventions</h3><p>You\'re doing great — no support actions assigned.</p></div></div>';
+        return;
+      }
+      const STATUS_BADGE = { Pending: 'badge-yellow', 'In Progress': 'badge-blue', Completed: 'badge-green', Closed: 'badge-gray' };
+      document.getElementById('list').innerHTML = data.data.map(i => `
+        <div class="card mb-4">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+            <div style="font-size:16px;font-weight:700;">${esc(i.title)}</div>
+            <span class="badge ${STATUS_BADGE[i.status]}">${esc(i.status)}</span>
+          </div>
+          <div style="color:var(--ink-3);font-size:14px;margin-bottom:10px;">${esc(i.description || '')}</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-3);">
+            <span>Type: <strong>${esc(i.type.replace(/_/g,' '))}</strong></span>
+            <span>Assigned: <strong>${esc(i.assignee_name || '—')}</strong></span>
+            ${i.due_date ? `<span>Due: <strong>${new Date(i.due_date).toLocaleDateString()}</strong></span>` : ''}
+          </div>
+          ${i.notes ? `<div class="msg msg-info show" style="margin-top:12px;"><strong>Notes:</strong> ${esc(i.notes)}</div>` : ''}
+        </div>`).join('');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Profile — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>My Profile</h1><p>Your academic record.</p></div></div>
+        <div class="card" id="profileCard"><div class="skeleton" style="height:150px;"></div></div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/student/profile');
+      if (!ok) return;
+      const s = data.data;
+      document.getElementById('profileCard').innerHTML = `
+        <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
+          <span class="profile-avatar" style="width:70px;height:70px;font-size:26px;">${s.full_name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</span>
+          <div>
+            <div style="font-size:22px;font-weight:800;">${esc(s.full_name)}</div>
+            <div style="color:var(--ink-3);">${esc(s.email)}</div>
+          </div>
+        </div>
+        <div class="grid-3" style="gap:20px;">
+          <div><div style="font-size:12px;color:var(--ink-3);">Matric Number</div><strong>${esc(s.matric_no)}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Level</div><strong>${s.level}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Admission Year</div><strong>${s.admission_year}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Department</div><strong>${esc(s.department_name)}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Programme</div><strong>${esc(s.programme_name)}</strong></div>
+          <div><div style="font-size:12px;color:var(--ink-3);">Phone</div><strong>${esc(s.phone || '—')}</strong></div>
+        </div>`;
+    });
+  </script>
+</body>
+</html>

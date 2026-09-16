@@ -1,0 +1,58 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lecturer Dashboard — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header">
+          <div><h1>Lecturer Dashboard</h1><p>Your courses and at-risk students.</p></div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon primary">📖</div><div class="stat-body"><div class="stat-value" id="sCourses">—</div><div class="stat-label">My Courses</div></div></div>
+          <div class="stat"><div class="stat-icon accent">🎓</div><div class="stat-body"><div class="stat-value" id="sStudents">—</div><div class="stat-label">Students</div></div></div>
+          <div class="stat"><div class="stat-icon orange">⚠</div><div class="stat-body"><div class="stat-value" id="sAtRisk">—</div><div class="stat-label">At-Risk</div></div></div>
+          <div class="stat"><div class="stat-icon green">✓</div><div class="stat-body"><div class="stat-value" id="sAttn">—</div><div class="stat-label">Avg Attendance</div></div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div><h3>My Courses</h3><p>Courses you're teaching</p></div>
+              <a href="/lecturer/my-courses.html" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <ul class="activity-list" id="coursesList">
+              <li class="skeleton" style="height:60px;margin-bottom:10px;"></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div><h3>At-Risk Students</h3><p>Needs attention</p></div>
+              <a href="/lecturer/at-risk-students.html" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <ul class="activity-list" id="atRiskList">
+              <li class="skeleton" style="height:60px;"></li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/lecturer/dashboard.js"></script>
+</body>
+</html>

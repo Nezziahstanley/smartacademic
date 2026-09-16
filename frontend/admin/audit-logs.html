@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Logs — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header">
+          <div><h1>Audit Logs</h1><p>Complete activity history for compliance and security.</p></div>
+        </div>
+
+        <div class="filters">
+          <select class="select" id="moduleFilter" style="max-width:200px;"><option value="">All modules</option></select>
+          <div class="search"><input type="search" id="searchInput" placeholder="Search by action, user, or record..." /></div>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th>When</th><th>User</th><th>Action</th><th>Module</th><th>Record</th><th>IP</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="6"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+          <span id="paginationInfo">—</span>
+          <div class="pages" id="paginationButtons"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/audit-logs.js"></script>
+</body>
+</html>

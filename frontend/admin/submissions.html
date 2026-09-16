@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOD Submissions — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>HOD Submissions</h1>
+            <p>Approve or reject requests from HODs.</p>
+          </div>
+        </div>
+
+        <div class="filters">
+          <select class="select" id="statusFilter" style="max-width:180px;">
+            <option value="">All status</option>
+            <option value="pending" selected>Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <select class="select" id="typeFilter" style="max-width:180px;">
+            <option value="">All types</option>
+            <option value="student">Student</option>
+            <option value="lecturer">Lecturer</option>
+            <option value="course">Course</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Details</th>
+                <th>HOD</th>
+                <th>Department</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, confirmDelete, toast } = window.SACrud;
+
+      const STATUS_BADGE = { pending: 'badge-yellow', approved: 'badge-green', rejected: 'badge-red' };
+
+      async function load() {
+        $('#tbody').innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>';
+        const p = new URLSearchParams();
+        if ($('#statusFilter').value) p.set('status', $('#statusFilter').value);
+        if ($('#typeFilter').value) p.set('type', $('#typeFilter').value);
+
+        const { ok, data } = await api('/api/admin/submissions?' + p.toString());
+        if (!ok) { $('#tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red);">Failed.</td></tr>'; return; }
+        if (!data.data.length) {
+          $('#tbody').innerHTML = '<tr><td colspan="7"><div class="empty" style="padding:40px;"><div class="empty-icon">📥</div><h3>No submissions</h3></div></td></tr>';
+          return;
+        }
+
+        $('#tbody').innerHTML = data.data.map(s => {
+          const payload = s.payload || {};
+          let summary = '';
+          if (s.type === 'student') summary = `${esc(payload.full_name || '')} · ${esc(payload.matric_no || '')} · L${payload.level || '?'}`;
+          else if (s.type === 'lecturer') summary = `${esc(payload.title || '')} ${esc(payload.full_name || '')} · ${esc(payload.staff_id || '')}`;
+          else if (s.type === 'course') summary = `${esc(payload.code || '')} — ${esc(payload.title || '')} · ${payload.units || 0}u`;
+
+          return `
+            <tr>
+              <td><span class="badge badge-blue">${esc(s.type)}</span></td>
+              <td>${summary}</td>
+              <td>${esc(s.hod_name)}</td>
+              <td>${esc(s.department_name)}</td>
+              <td>${new Date(s.created_at).toLocaleDateString()}</td>
+              <td><span class="badge ${STATUS_BADGE[s.status]}">${esc(s.status)}</span></td>
+              <td>
+                <div class="actions">
+                  ${s.status === 'pending' ? `
+                    <button class="btn btn-primary btn-sm" data-approve="${s.id}">✓ Approve</button>
+                    <button class="btn btn-danger btn-sm" data-reject="${s.id}">✕ Reject</button>
+                  ` : '<span class="text-muted" style="font-size:12px;">Reviewed</span>'}
+                </div>
+              </td>
+            </tr>`;
+        }).join('');
+
+        $('#tbody').querySelectorAll('[data-approve]').forEach(b =>
+          b.addEventListener('click', () => approve(parseInt(b.dataset.approve, 10))));
+        $('#tbody').querySelectorAll('[data-reject]').forEach(b =>
+          b.addEventListener('click', () => reject(parseInt(b.dataset.reject, 10))));
+      }
+
+      async function approve(id) {
+        if (!confirm('Approve this submission? The record will be created.')) return;
+        const { ok, data } = await api('/api/admin/submissions/' + id + '/approve', { method: 'POST' });
+        if (!ok) { alert(data?.error || 'Failed'); return; }
+        toast('Approved and created');
+        load();
+      }
+
+      function reject(id) {
+        openModal({
+          title: 'Reject submission',
+          size: 'sm',
+          confirmText: 'Reject',
+          body: '<div class="field"><label>Reason (optional)</label><textarea class="textarea" id="f_notes" rows="3"></textarea></div>',
+          onConfirm: async (bd, close) => {
+            const admin_notes = bd.querySelector('#f_notes').value.trim() || null;
+            const { ok } = await api('/api/admin/submissions/' + id + '/reject', {
+              method: 'POST',
+              body: JSON.stringify({ admin_notes }),
+            });
+            if (!ok) { alert('Failed'); return; }
+            close(); toast('Rejected'); load();
+          },
+        });
+      }
+
+      document.addEventListener('sa:layout-ready', () => {
+        $('#statusFilter').addEventListener('change', load);
+        $('#typeFilter').addEventListener('change', load);
+        load();
+      });
+    })();
+  </script>
+</body>
+</html>

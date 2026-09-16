@@ -1,0 +1,139 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Risk Monitoring — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+
+    <div class="main">
+      <div id="topbarSlot"></div>
+
+      <main class="page">
+
+        <!-- ============ PAGE HEADER ============ -->
+        <div class="page-header">
+          <div>
+            <h1>Risk Monitoring</h1>
+            <p>Live academic risk assessment across all students.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnAutoIntervene">🤝 Auto-Intervene High Risk</button>
+            <button class="btn btn-primary" id="btnRecalc">↻ Recompute Risk</button>
+          </div>
+        </div>
+
+        <!-- ============ RISK SUMMARY CARDS ============ -->
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-icon green">✓</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sGreen">—</div>
+              <div class="stat-label">Good Standing</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon yellow">!</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sYellow">—</div>
+              <div class="stat-label">Needs Attention</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon orange">⚠</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sOrange">—</div>
+              <div class="stat-label">High Risk</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon red">✕</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sRed">—</div>
+              <div class="stat-label">Critical</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ FILTERS ============ -->
+        <div class="filters">
+          <select class="select" id="catFilter" style="max-width: 180px;">
+            <option value="">All categories</option>
+            <option value="GREEN">🟢 GREEN</option>
+            <option value="YELLOW">🟡 YELLOW</option>
+            <option value="ORANGE">🟠 ORANGE</option>
+            <option value="RED">🔴 RED</option>
+          </select>
+
+          <select class="select" id="deptFilter" style="max-width: 220px;">
+            <option value="">All departments</option>
+          </select>
+
+          <select class="select" id="levelFilter" style="max-width: 140px;">
+            <option value="">All levels</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+          </select>
+
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by name or matric..." />
+          </div>
+
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <!-- ============ TABLE ============ -->
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Department</th>
+                <th>Level</th>
+                <th>Category</th>
+                <th>Score</th>
+                <th>Attend%</th>
+                <th>GPA</th>
+                <th>Failed</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>
+              <tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>
+              <tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============ PAGINATION ============ -->
+        <div class="pagination" id="pagination">
+          <span id="paginationInfo">—</span>
+          <div class="pages" id="paginationButtons"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ MODAL CONTAINER ============ -->
+  <div id="modalRoot"></div>
+
+  <!-- ============ SCRIPTS ============ -->
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/risk-monitoring.js"></script>
+</body>
+</html>

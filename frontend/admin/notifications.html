@@ -1,0 +1,41 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications — SMARTACADEMIC Admin</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header">
+          <div><h1>Notifications</h1><p>Broadcast announcements and view recent activity.</p></div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnBroadcast">+ Broadcast</button>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header"><div><h3>Recent Notifications</h3><p>Latest messages across all users</p></div></div>
+          <ul class="activity-list" id="list">
+            <li class="skeleton" style="height:60px;margin-bottom:10px;"></li>
+            <li class="skeleton" style="height:60px;"></li>
+          </ul>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/notifications.js"></script>
+</body>
+</html>

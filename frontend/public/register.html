@@ -1,0 +1,159 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/auth.css" />
+</head>
+<body data-page="register">
+
+  <script>
+    (function () {
+      const p = new URLSearchParams(location.search);
+      if (p.get('invite')) {
+        document.addEventListener('DOMContentLoaded', () => {
+          const b = document.createElement('div');
+          b.style.cssText = 'background:#dcfce7;color:#166534;padding:12px;text-align:center;font-weight:600;font-size:14px;border-bottom:1px solid #bbf7d0;';
+          b.textContent = '✉️ You have been invited. Complete your registration below.';
+          document.body.insertBefore(b, document.body.firstChild);
+        });
+      }
+    })();
+  </script>
+
+<div class="auth-shell">
+
+  <!-- ============ BRAND PANEL ============ -->
+  <aside class="auth-brand">
+    <div class="auth-brand-top">
+      <a href="/" class="brand">
+        <span class="brand-mark">S</span>
+        <span class="brand-name">SMART<span>ACADEMIC</span></span>
+      </a>
+    </div>
+
+    <div class="auth-brand-body">
+      <h1>Create your SMARTACADEMIC account.</h1>
+      <p>Join students and lecturers using early-warning analytics to improve academic outcomes.</p>
+
+      <ul class="auth-brand-points">
+        <li><span class="chk">✓</span> Free to register</li>
+        <li><span class="chk">✓</span> Instant access to your dashboard</li>
+        <li><span class="chk">✓</span> Track attendance, results, and risk</li>
+        <li><span class="chk">✓</span> Get help before it's too late</li>
+      </ul>
+    </div>
+
+    <div class="auth-brand-bottom">
+      © <span id="year"></span> SMARTACADEMIC
+    </div>
+  </aside>
+
+  <!-- ============ FORM PANEL ============ -->
+  <main class="auth-form-wrap">
+    <form class="auth-form" id="registerForm" novalidate>
+      <div class="auth-form-head">
+        <h2>Create account</h2>
+        <p>Choose your role and fill in your details.</p>
+      </div>
+
+      <div class="msg" id="registerMsg"></div>
+
+      <!-- Role tabs -->
+      <div class="tabs">
+        <button type="button" class="tab active" data-role="student">Student</button>
+        <button type="button" class="tab" data-role="lecturer">Lecturer</button>
+      </div>
+      <input type="hidden" id="role" value="student" />
+
+      <!-- Common fields -->
+      <div class="field">
+        <label for="full_name">Full name <span class="req">*</span></label>
+        <input type="text" id="full_name" class="input" placeholder="Jane Doe" required />
+      </div>
+
+      <div class="field">
+        <label for="email">Email address <span class="req">*</span></label>
+        <input type="email" id="email" class="input" placeholder="you@institution.edu" autocomplete="email" required />
+      </div>
+
+      <div class="field">
+        <label for="phone">Phone number</label>
+        <input type="tel" id="phone" class="input" placeholder="+234 800 000 0000" autocomplete="tel" />
+      </div>
+
+      <div class="field">
+        <label for="department_id">Department <span class="req">*</span></label>
+        <select id="department_id" class="input" required>
+          <option value="">Loading departments...</option>
+        </select>
+      </div>
+
+      <!-- Student-only fields -->
+      <div class="field role-student">
+        <label for="matric_no">Matric number <span class="req">*</span></label>
+        <input type="text" id="matric_no" class="input" placeholder="2021/CSC/001" />
+      </div>
+
+      <div class="field role-student">
+        <label for="programme_id">Programme <span class="req">*</span></label>
+        <select id="programme_id" class="input">
+          <option value="">Select department first</option>
+        </select>
+      </div>
+
+      <div class="field-row role-student">
+        <div class="field">
+          <label for="level">Level <span class="req">*</span></label>
+          <select id="level" class="input">
+            <option value="">Select</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="admission_year">Admission year</label>
+          <input type="number" id="admission_year" class="input" placeholder="2021" min="1990" max="2100" />
+        </div>
+      </div>
+
+      <!-- Lecturer-only fields -->
+      <div class="field role-lecturer" style="display:none;">
+        <label for="staff_id">Staff ID <span class="req">*</span></label>
+        <input type="text" id="staff_id" class="input" placeholder="CSC-L001" />
+      </div>
+
+      <div class="field role-lecturer" style="display:none;">
+        <label for="title">Title</label>
+        <input type="text" id="title" class="input" placeholder="Dr. / Prof. / Mr. / Mrs." />
+      </div>
+
+      <div class="field">
+        <label for="password">Password <span class="req">*</span></label>
+        <div class="pw-wrap">
+          <input type="password" id="password" class="input" placeholder="At least 6 characters" autocomplete="new-password" required />
+          <button type="button" class="pw-toggle" data-target="password">Show</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="registerBtn">Create account</button>
+
+      <div class="auth-footer">
+        Already have an account? <a href="/login.html" class="link">Sign in</a>
+      </div>
+
+      <a href="/" class="back-home">← Back to home</a>
+    </form>
+  </main>
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

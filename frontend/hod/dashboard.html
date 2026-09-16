@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOD Dashboard — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header">
+          <div>
+            <h1 id="deptName">Department Dashboard</h1>
+            <p>Real-time overview of your department's academic health.</p>
+          </div>
+          <div class="page-actions">
+            <a href="/hod/reports.html" class="btn btn-ghost">📄 Reports</a>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon primary">🎓</div><div class="stat-body"><div class="stat-value" id="sStudents">—</div><div class="stat-label">Students</div></div></div>
+          <div class="stat"><div class="stat-icon accent">👨‍🏫</div><div class="stat-body"><div class="stat-value" id="sLecturers">—</div><div class="stat-label">Lecturers</div></div></div>
+          <div class="stat"><div class="stat-icon primary">📖</div><div class="stat-body"><div class="stat-value" id="sCourses">—</div><div class="stat-label">Courses</div></div></div>
+          <div class="stat"><div class="stat-icon accent">📈</div><div class="stat-body"><div class="stat-value" id="sGpa">—</div><div class="stat-label">Avg GPA</div></div></div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon green">✓</div><div class="stat-body"><div class="stat-value" id="sGreen">—</div><div class="stat-label">Good Standing</div></div></div>
+          <div class="stat"><div class="stat-icon yellow">!</div><div class="stat-body"><div class="stat-value" id="sYellow">—</div><div class="stat-label">Needs Attention</div></div></div>
+          <div class="stat"><div class="stat-icon orange">⚠</div><div class="stat-body"><div class="stat-value" id="sOrange">—</div><div class="stat-label">High Risk</div></div></div>
+          <div class="stat"><div class="stat-icon red">✕</div><div class="stat-body"><div class="stat-value" id="sRed">—</div><div class="stat-label">Critical</div></div></div>
+        </div>
+
+        <div class="grid-2-1 mb-4">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div><h3>Course Performance</h3><p>Average score per course</p></div>
+            </div>
+            <div class="chart-wrap"><canvas id="courseChart"></canvas></div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-header">
+              <div><h3>Risk Distribution</h3><p>Current snapshot</p></div>
+            </div>
+            <div class="chart-wrap"><canvas id="riskChart"></canvas></div>
+            <ul class="legend-list" id="riskLegend"></ul>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div><h3>At-Risk Students</h3><p>Requires immediate attention</p></div>
+              <a href="/hod/risk-monitoring.html" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead><tr><th>Student</th><th>Risk</th><th>Score</th></tr></thead>
+                <tbody id="highRiskBody"><tr><td colspan="3"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Quick Actions</h3><p>Common tasks</p></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <a href="/hod/students.html" class="btn btn-ghost" style="justify-content:flex-start;">🎓 View Students</a>
+              <a href="/hod/lecturers.html" class="btn btn-ghost" style="justify-content:flex-start;">👨‍🏫 View Lecturers</a>
+              <a href="/hod/attendance.html" class="btn btn-ghost" style="justify-content:flex-start;">✅ Attendance Overview</a>
+              <a href="/hod/performance.html" class="btn btn-ghost" style="justify-content:flex-start;">📊 Performance Analytics</a>
+              <a href="/hod/interventions.html" class="btn btn-primary" style="justify-content:flex-start;">+ Create Intervention</a>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/hod/dashboard.js"></script>
+</body>
+</html>

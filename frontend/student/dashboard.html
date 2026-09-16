@@ -1,0 +1,91 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Dashboard — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header">
+          <div>
+            <h1>Hello, <span id="firstName">Student</span> 👋</h1>
+            <p id="studentMeta">Loading your academic snapshot...</p>
+          </div>
+        </div>
+
+        <!-- Academic health card -->
+        <div class="card mb-4" id="healthCard" style="background:linear-gradient(135deg,#eef2ff,#ecfeff);border:none;">
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+            <div id="riskBadgeWrap">
+              <span class="badge badge-gray" id="riskBadge">—</span>
+            </div>
+            <div style="flex:1;min-width:220px;">
+              <div style="font-size:15px;font-weight:700;color:var(--ink);" id="healthTitle">Your academic health</div>
+              <div style="font-size:13.5px;color:var(--ink-3);margin-top:2px;" id="healthMsg">Computing your latest status...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon primary">📈</div><div class="stat-body"><div class="stat-value" id="sGpa">—</div><div class="stat-label">Current GPA</div></div></div>
+          <div class="stat"><div class="stat-icon accent">🎯</div><div class="stat-body"><div class="stat-value" id="sCgpa">—</div><div class="stat-label">CGPA</div></div></div>
+          <div class="stat"><div class="stat-icon green">✅</div><div class="stat-body"><div class="stat-value" id="sAttn">—</div><div class="stat-label">Attendance</div></div></div>
+          <div class="stat"><div class="stat-icon red">📚</div><div class="stat-body"><div class="stat-value" id="sFailed">—</div><div class="stat-label">Failed Courses</div></div></div>
+        </div>
+
+        <div class="grid-2-1 mb-4">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div><h3>GPA Trend</h3><p>Your semester-by-semester GPA</p></div>
+            </div>
+            <div class="chart-wrap"><canvas id="gpaChart"></canvas></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div><h3>Attendance Breakdown</h3></div></div>
+            <ul class="legend-list" id="attnLegend">
+              <li class="skeleton" style="height:30px;"></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div><h3>Recent Results</h3></div>
+              <a href="/student/my-results.html" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;border:none;">
+              <table class="table">
+                <thead><tr><th>Course</th><th>Score</th><th>Grade</th></tr></thead>
+                <tbody id="resultsBody"><tr><td colspan="3"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div><h3>Support & Interventions</h3></div></div>
+            <ul class="activity-list" id="interventionsList">
+              <li class="skeleton" style="height:60px;"></li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/student/dashboard.js"></script>
+</body>
+</html>

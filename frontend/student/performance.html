@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Performance — Student</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+        <div class="page-header"><div><h1>Performance</h1><p>Your academic performance per course.</p></div></div>
+
+        <div class="card chart-card mb-4">
+          <div class="card-header"><div><h3>Average Score by Course</h3></div></div>
+          <div class="chart-wrap"><canvas id="courseChart"></canvas></div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Course</th><th>Units</th><th>Avg Score</th><th>Min</th><th>Max</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    document.addEventListener('sa:layout-ready', async () => {
+      const { api, esc } = window.SACrud;
+      const { ok, data } = await api('/api/student/performance');
+      if (!ok) return;
+      const rows = data.data.byCourse;
+      document.getElementById('tbody').innerHTML = rows.map(r => `
+        <tr>
+          <td><strong>${esc(r.code)}</strong> ${esc(r.title)}</td>
+          <td>${r.units}</td>
+          <td><strong>${r.avg_score}</strong></td>
+          <td>${r.min_score}</td>
+          <td>${r.max_score}</td>
+        </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">No data</td></tr>';
+
+      const canvas = document.getElementById('courseChart');
+      if (!rows.length) { canvas.parentElement.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">📊</div><h3>No data yet</h3></div>'; return; }
+      const draw = () => new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: rows.map(r => r.code),
+          datasets: [{ label: 'Avg Score', data: rows.map(r => parseFloat(r.avg_score)), backgroundColor: '#166534', borderRadius: 8 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } },
+      });
+      if (typeof Chart === 'undefined') window.addEventListener('load', draw); else draw();
+    });
+  </script>
+</body>
+</html>

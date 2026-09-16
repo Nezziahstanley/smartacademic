@@ -1,0 +1,353 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Courses — SMARTACADEMIC</title>
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>My Courses</h1>
+            <p>Register for courses or drop them based on your credit unit limit.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnAddCourse">+ Register Course</button>
+          </div>
+        </div>
+
+        <!-- Credit Units Summary -->
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-icon primary">📚</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sTotalUnits">—</div>
+              <div class="stat-label">Registered Units</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon yellow">⚠</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sMinUnits">15</div>
+              <div class="stat-label">Min Units</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon green">✓</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sRemainingUnits">—</div>
+              <div class="stat-label">Remaining to Max</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon accent">📊</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sMaxUnits">24</div>
+              <div class="stat-label">Max Units</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warning banner -->
+        <div id="minUnitsWarning" class="msg msg-warning" style="display:none;margin-bottom:18px;"></div>
+
+        <!-- Registered Courses -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <div>
+              <h3>Registered Courses</h3>
+              <p id="sessionInfo">—</p>
+            </div>
+          </div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Title</th>
+                  <th>Units</th>
+                  <th>Level</th>
+                  <th>Semester</th>
+                  <th>Lecturer</th>
+                  <th style="text-align:right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="regBody">
+                <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, confirmDelete, toast } = window.SACrud;
+
+      const MIN_UNITS = 15;
+      const MAX_UNITS = 24;
+
+      let currentTotalUnits = 0;
+
+      /* ============================================================
+         LOAD REGISTERED COURSES
+         ============================================================ */
+      async function loadRegistrations() {
+        $('#regBody').innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>';
+
+        const { ok, data } = await api('/api/student/my-registrations');
+        if (!ok) {
+          $('#regBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
+          return;
+        }
+
+        const { registrations, totalUnits, remainingUnits } = data.data;
+        currentTotalUnits = totalUnits;
+
+        $('#sTotalUnits').textContent = totalUnits;
+        $('#sRemainingUnits').textContent = remainingUnits;
+        $('#sMinUnits').textContent = MIN_UNITS;
+        $('#sMaxUnits').textContent = MAX_UNITS;
+
+        const warning = $('#minUnitsWarning');
+        if (totalUnits > 0 && totalUnits < MIN_UNITS) {
+          warning.style.display = 'block';
+          warning.innerHTML = `⚠️ <strong>Below minimum:</strong> You have <strong>${totalUnits}</strong> units but need at least <strong>${MIN_UNITS}</strong>. Add more courses.`;
+        } else {
+          warning.style.display = 'none';
+        }
+
+        if (registrations.length === 0) {
+          $('#regBody').innerHTML = `
+            <tr><td colspan="7">
+              <div class="empty" style="padding:40px;">
+                <div class="empty-icon">📖</div>
+                <h3>No registered courses</h3>
+                <p>Click "+ Register Course" to add one.</p>
+              </div>
+            </td></tr>`;
+          $('#sessionInfo').textContent = '—';
+          return;
+        }
+
+        $('#sessionInfo').textContent =
+          `${registrations[0].session_name} — ${registrations[0].semester_name}`;
+
+        $('#regBody').innerHTML = registrations.map(r => `
+          <tr>
+            <td><strong>${esc(r.code)}</strong></td>
+            <td>${esc(r.title)}</td>
+            <td><span class="badge badge-blue">${r.units}u</span></td>
+            <td>${r.level}</td>
+            <td>${esc(r.semester_name)}</td>
+            <td>${esc(r.lecturer_name || '—')}</td>
+            <td>
+              <div class="actions">
+                <button class="btn btn-ghost btn-sm" data-drop="${r.id}">Drop</button>
+              </div>
+            </td>
+          </tr>`).join('');
+
+        $('#regBody').querySelectorAll('[data-drop]').forEach(b =>
+          b.addEventListener('click', () => dropCourse(parseInt(b.dataset.drop, 10))));
+      }
+
+      /* ============================================================
+         ADD COURSE MODAL — group courses by level
+         ============================================================ */
+      async function openAddModal() {
+        const { ok, data } = await api('/api/student/available-courses');
+        if (!ok) {
+          alert('Failed to load available courses. Try refreshing.');
+          return;
+        }
+
+        const { courses, session, semester } = data.data;
+
+        if (!courses.length) {
+          openModal({
+            title: 'Register Course',
+            subtitle: `${session.name} — ${semester.name}`,
+            confirmText: 'Close',
+            body: `
+              <div class="empty" style="padding:30px;">
+                <div class="empty-icon">✅</div>
+                <h3>No available courses</h3>
+                <p>You have registered all courses for your department and level this semester, or no courses exist yet.</p>
+                <p style="font-size:12px;color:var(--muted);margin-top:10px;">
+                  Contact your HOD or admin if you believe this is an error.
+                </p>
+              </div>`,
+            onConfirm: (_b, close) => close(),
+          });
+          return;
+        }
+
+        // Group courses by level
+        const grouped = {};
+        courses.forEach(c => {
+          if (!grouped[c.level]) grouped[c.level] = [];
+          grouped[c.level].push(c);
+        });
+        const levels = Object.keys(grouped).sort((a, b) => b - a); // newest level first
+
+        const body = `
+          <div class="msg msg-info show" style="margin-bottom:14px;">
+            <strong>${esc(session.name)} — ${esc(semester.name)}</strong><br>
+            <span style="font-size:13px;">
+              Currently registered: <strong>${currentTotalUnits}</strong> units |
+              Min: ${MIN_UNITS} | Max: ${MAX_UNITS}
+            </span>
+          </div>
+
+          <div style="max-height:450px;overflow-y:auto;">
+            ${levels.map(lvl => `
+              <div style="margin-bottom:20px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                  <span style="font-weight:800;font-size:13px;letter-spacing:.06em;color:var(--primary);text-transform:uppercase;">
+                    Level ${lvl}
+                  </span>
+                  <span style="font-size:12px;color:var(--ink-3);">
+                    (${grouped[lvl].length} course${grouped[lvl].length > 1 ? 's' : ''} ·
+                     ${grouped[lvl].reduce((s,c) => s + c.units, 0)} units available)
+                  </span>
+                </div>
+                <div class="table-wrap" style="box-shadow:none;">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th style="width:36px;"></th>
+                        <th>Code</th>
+                        <th>Title</th>
+                        <th>Units</th>
+                        <th>Lecturer</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${grouped[lvl].map(c => `
+                        <tr>
+                          <td><input type="checkbox" data-course="${c.id}" data-units="${c.units}" /></td>
+                          <td><strong>${esc(c.code)}</strong></td>
+                          <td>${esc(c.title)}</td>
+                          <td><span class="badge badge-blue">${c.units}u</span></td>
+                          <td>${esc(c.lecturer_name || '—')}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div id="selectedSummary" style="margin-top:14px;padding:12px;background:var(--bg-2);border-radius:8px;font-size:14px;">
+            Selected: <strong>0</strong> units | Total after adding: <strong>${currentTotalUnits}</strong> units
+          </div>
+        `;
+
+        openModal({
+          title: 'Register Course',
+          subtitle: `${session.name} — ${semester.name}`,
+          size: 'lg',
+          confirmText: 'Register Selected',
+          body,
+          onReady: (bd) => {
+            const updateUnits = () => {
+              let sum = 0;
+              bd.querySelectorAll('[data-course]:checked').forEach(cb => {
+                sum += parseInt(cb.dataset.units, 10);
+              });
+              const newTotal = currentTotalUnits + sum;
+              let warn = '';
+              if (newTotal > MAX_UNITS) {
+                warn = ` <span style="color:var(--red);"> ⚠️ Exceeds max (${MAX_UNITS})</span>`;
+              } else if (newTotal < MIN_UNITS) {
+                warn = ` <span style="color:var(--orange);"> ⚠️ Below min (${MIN_UNITS})</span>`;
+              } else {
+                warn = ` <span style="color:var(--green);"> ✓ Within limits</span>`;
+              }
+              bd.querySelector('#selectedSummary').innerHTML =
+                `Selected: <strong>${sum}</strong> units | Total after adding: <strong>${newTotal}</strong> units${warn}`;
+            };
+            bd.querySelectorAll('[data-course]').forEach(cb =>
+              cb.addEventListener('change', updateUnits));
+          },
+          onConfirm: async (bd, close) => {
+            const selected = Array.from(bd.querySelectorAll('[data-course]:checked'))
+              .map(cb => parseInt(cb.dataset.course, 10));
+
+            if (!selected.length) {
+              alert('Select at least one course.');
+              return;
+            }
+
+            let success = 0, fail = 0;
+            const errors = [];
+
+            for (const courseId of selected) {
+              const { ok, data } = await api('/api/student/register-course', {
+                method: 'POST',
+                body: JSON.stringify({ course_id: courseId }),
+              });
+              if (ok) success++;
+              else { fail++; if (data?.error) errors.push(data.error); }
+            }
+
+            close();
+
+            if (fail > 0) {
+              alert(`✅ Registered: ${success}\n⚠️ Failed: ${fail}\n\n${errors.slice(0, 3).join('\n')}`);
+            } else {
+              toast(`✅ Registered ${success} course(s)`);
+            }
+            loadRegistrations();
+          },
+        });
+      }
+
+      /* ============================================================
+         DROP COURSE
+         ============================================================ */
+      async function dropCourse(id) {
+        confirmDelete({
+          title: 'Drop this course?',
+          message: 'You can re-register later if units allow.',
+          onConfirm: async () => {
+            const { ok, data } = await api('/api/student/drop-course/' + id, { method: 'POST' });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            toast('Course dropped');
+            loadRegistrations();
+          },
+        });
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      document.addEventListener('sa:layout-ready', () => {
+        $('#btnAddCourse').addEventListener('click', openAddModal);
+        loadRegistrations();
+      });
+    })();
+  </script>
+</body>
+</html>

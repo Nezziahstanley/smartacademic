@@ -1,0 +1,245 @@
+<!-- ============================================================
+     SMARTACADEMIC — Sidebar (loaded into #sidebarSlot)
+     Role-based menus, active link highlighting, logout.
+     ============================================================ -->
+
+<aside class="sidebar" id="sidebar">
+
+  <!-- Brand -->
+  <a href="/" class="sb-brand">
+    <span class="sb-brand-mark">
+      <img src="/assets/images/fpu-logo.png" alt="FPU"
+          />
+    </span>
+    <span class="sb-brand-text">
+      <span class="sb-brand-name">Federal Polytechnic</span>
+      <span class="sb-brand-sub">Ugep · SMARTACADEMIC</span>
+    </span>
+  </a>
+
+  <!-- Role pill -->
+  <div class="sb-role" data-sidebar-role>—</div>
+
+  <!-- ============ ADMIN MENU ============ -->
+  <nav class="sb-section" data-role-menu="admin" hidden>
+    <div class="sb-section-title">Overview</div>
+    <a href="/admin/dashboard.html" class="sb-link" data-tip="Dashboard">
+      <span class="sb-ico">📊</span><span class="sb-label">Dashboard</span>
+    </a>
+
+    <div class="sb-section-title">People</div>
+    <a href="/admin/users.html" class="sb-link" data-tip="Users">
+      <span class="sb-ico">👥</span><span class="sb-label">Users</span>
+    </a>
+    <a href="/admin/pending-users.html" class="sb-link" data-tip="Pending Approvals">
+      <span class="sb-ico">⏳</span><span class="sb-label">Pending Approvals</span>
+    </a>
+    <a href="/admin/submissions.html" class="sb-link" data-tip="HOD Submissions">
+      <span class="sb-ico">📥</span><span class="sb-label">HOD Submissions</span>
+    </a>
+    <a href="/admin/students.html" class="sb-link" data-tip="Students">
+      <span class="sb-ico">🎓</span><span class="sb-label">Students</span>
+    </a>
+    <a href="/admin/lecturers.html" class="sb-link" data-tip="Lecturers">
+      <span class="sb-ico">👨‍🏫</span><span class="sb-label">Lecturers</span>
+    </a>
+
+    <div class="sb-section-title">Academics</div>
+    <a href="/admin/departments.html" class="sb-link" data-tip="Departments">
+      <span class="sb-ico">🏛️</span><span class="sb-label">Departments</span>
+    </a>
+    <a href="/admin/programmes.html" class="sb-link" data-tip="Programmes">
+      <span class="sb-ico">📚</span><span class="sb-label">Programmes</span>
+    </a>
+    <a href="/admin/courses.html" class="sb-link" data-tip="Courses">
+      <span class="sb-ico">📖</span><span class="sb-label">Courses</span>
+    </a>
+    <a href="/admin/sessions.html" class="sb-link" data-tip="Sessions">
+      <span class="sb-ico">📅</span><span class="sb-label">Sessions</span>
+    </a>
+    <a href="/admin/semesters.html" class="sb-link" data-tip="Semesters">
+      <span class="sb-ico">🗓️</span><span class="sb-label">Semesters</span>
+    </a>
+    <a href="/admin/course-registration.html" class="sb-link" data-tip="Registrations">
+      <span class="sb-ico">📝</span><span class="sb-label">Course Registration</span>
+    </a>
+    <a href="/admin/attendance.html" class="sb-link" data-tip="Attendance">
+      <span class="sb-ico">✅</span><span class="sb-label">Attendance</span>
+    </a>
+    <a href="/admin/results.html" class="sb-link" data-tip="Results">
+      <span class="sb-ico">📈</span><span class="sb-label">Results</span>
+    </a>
+
+    <div class="sb-section-title">Monitoring</div>
+    <a href="/admin/risk-monitoring.html" class="sb-link" data-tip="Risk Monitoring">
+      <span class="sb-ico">🚦</span><span class="sb-label">Risk Monitoring</span>
+    </a>
+    <a href="/admin/interventions.html" class="sb-link" data-tip="Interventions">
+      <span class="sb-ico">🤝</span><span class="sb-label">Interventions</span>
+    </a>
+    <a href="/admin/notifications.html" class="sb-link" data-tip="Notifications">
+      <span class="sb-ico">🔔</span><span class="sb-label">Notifications</span>
+    </a>
+
+    <div class="sb-section-title">System</div>
+    <a href="/admin/reports.html" class="sb-link" data-tip="Reports">
+      <span class="sb-ico">📄</span><span class="sb-label">Reports</span>
+    </a>
+    <a href="/admin/audit-logs.html" class="sb-link" data-tip="Audit Logs">
+      <span class="sb-ico">📜</span><span class="sb-label">Audit Logs</span>
+    </a>
+    <a href="/admin/settings.html" class="sb-link" data-tip="Settings">
+      <span class="sb-ico">⚙️</span><span class="sb-label">Settings</span>
+    </a>
+    <a href="/admin/profile.html" class="sb-link" data-tip="Profile">
+      <span class="sb-ico">👤</span><span class="sb-label">Profile</span>
+    </a>
+  </nav>
+
+  <!-- ============ HOD MENU ============ -->
+  <nav class="sb-section" data-role-menu="hod" hidden>
+    <div class="sb-section-title">Department</div>
+    <a href="/hod/dashboard.html" class="sb-link" data-tip="Dashboard">
+      <span class="sb-ico">📊</span><span class="sb-label">Dashboard</span>
+    </a>
+    <a href="/hod/students.html" class="sb-link" data-tip="Students">
+      <span class="sb-ico">🎓</span><span class="sb-label">Students</span>
+    </a>
+    <a href="/hod/lecturers.html" class="sb-link" data-tip="Lecturers">
+      <span class="sb-ico">👨‍🏫</span><span class="sb-label">Lecturers</span>
+    </a>
+    <a href="/hod/courses.html" class="sb-link" data-tip="Courses">
+      <span class="sb-ico">📖</span><span class="sb-label">Courses</span>
+    </a>
+    <a href="/hod/submissions.html" class="sb-link" data-tip="Submissions">
+      <span class="sb-ico">📤</span><span class="sb-label">Submissions</span>
+    </a>
+
+    <div class="sb-section-title">Monitoring</div>
+    <a href="/hod/attendance.html" class="sb-link" data-tip="Attendance">
+      <span class="sb-ico">✅</span><span class="sb-label">Attendance</span>
+    </a>
+    <a href="/hod/performance.html" class="sb-link" data-tip="Performance">
+      <span class="sb-ico">📈</span><span class="sb-label">Performance</span>
+    </a>
+    <a href="/hod/risk-monitoring.html" class="sb-link" data-tip="Risk Monitoring">
+      <span class="sb-ico">🚦</span><span class="sb-label">Risk Monitoring</span>
+    </a>
+    <a href="/hod/interventions.html" class="sb-link" data-tip="Interventions">
+      <span class="sb-ico">🤝</span><span class="sb-label">Interventions</span>
+    </a>
+
+    <div class="sb-section-title">Other</div>
+    <a href="/hod/notifications.html" class="sb-link" data-tip="Notifications">
+      <span class="sb-ico">🔔</span><span class="sb-label">Notifications</span>
+    </a>
+    <a href="/hod/reports.html" class="sb-link" data-tip="Reports">
+      <span class="sb-ico">📄</span><span class="sb-label">Reports</span>
+    </a>
+    <a href="/hod/profile.html" class="sb-link" data-tip="Profile">
+      <span class="sb-ico">👤</span><span class="sb-label">Profile</span>
+    </a>
+  </nav>
+
+  <!-- ============ LECTURER MENU ============ -->
+  <nav class="sb-section" data-role-menu="lecturer" hidden>
+    <div class="sb-section-title">Teaching</div>
+    <a href="/lecturer/dashboard.html" class="sb-link" data-tip="Dashboard">
+      <span class="sb-ico">📊</span><span class="sb-label">Dashboard</span>
+    </a>
+    <a href="/lecturer/my-courses.html" class="sb-link" data-tip="My Courses">
+      <span class="sb-ico">📖</span><span class="sb-label">My Courses</span>
+    </a>
+    <a href="/lecturer/students.html" class="sb-link" data-tip="Students">
+      <span class="sb-ico">🎓</span><span class="sb-label">Students</span>
+    </a>
+
+    <div class="sb-section-title">Academics</div>
+    <a href="/lecturer/attendance.html" class="sb-link" data-tip="Attendance">
+      <span class="sb-ico">✅</span><span class="sb-label">Attendance</span>
+    </a>
+    <a href="/lecturer/assessments.html" class="sb-link" data-tip="Assessments">
+      <span class="sb-ico">📝</span><span class="sb-label">Assessments</span>
+    </a>
+    <a href="/lecturer/results.html" class="sb-link" data-tip="Results">
+      <span class="sb-ico">📈</span><span class="sb-label">Results</span>
+    </a>
+
+    <div class="sb-section-title">Monitoring</div>
+    <a href="/lecturer/performance.html" class="sb-link" data-tip="Performance">
+      <span class="sb-ico">📊</span><span class="sb-label">Performance</span>
+    </a>
+    <a href="/lecturer/at-risk-students.html" class="sb-link" data-tip="At-Risk">
+      <span class="sb-ico">🚦</span><span class="sb-label">At-Risk Students</span>
+    </a>
+    <a href="/lecturer/interventions.html" class="sb-link" data-tip="Interventions">
+      <span class="sb-ico">🤝</span><span class="sb-label">Interventions</span>
+    </a>
+
+    <div class="sb-section-title">Other</div>
+    <a href="/lecturer/notifications.html" class="sb-link" data-tip="Notifications">
+      <span class="sb-ico">🔔</span><span class="sb-label">Notifications</span>
+    </a>
+    <a href="/lecturer/reports.html" class="sb-link" data-tip="Reports">
+      <span class="sb-ico">📄</span><span class="sb-label">Reports</span>
+    </a>
+    <a href="/lecturer/profile.html" class="sb-link" data-tip="Profile">
+      <span class="sb-ico">👤</span><span class="sb-label">Profile</span>
+    </a>
+  </nav>
+
+  <!-- ============ STUDENT MENU ============ -->
+  <nav class="sb-section" data-role-menu="student" hidden>
+    <div class="sb-section-title">My Academics</div>
+    <a href="/student/dashboard.html" class="sb-link" data-tip="Dashboard">
+      <span class="sb-ico">📊</span><span class="sb-label">Dashboard</span>
+    </a>
+    <a href="/student/my-courses.html" class="sb-link" data-tip="My Courses">
+      <span class="sb-ico">📖</span><span class="sb-label">My Courses</span>
+    </a>
+    <a href="/student/my-attendance.html" class="sb-link" data-tip="My Attendance">
+      <span class="sb-ico">✅</span><span class="sb-label">My Attendance</span>
+    </a>
+    <a href="/student/my-results.html" class="sb-link" data-tip="My Results">
+      <span class="sb-ico">📈</span><span class="sb-label">My Results</span>
+    </a>
+    <a href="/student/gpa-cgpa.html" class="sb-link" data-tip="GPA / CGPA">
+      <span class="sb-ico">🎯</span><span class="sb-label">GPA / CGPA</span>
+    </a>
+    <a href="/student/performance.html" class="sb-link" data-tip="Performance">
+      <span class="sb-ico">📉</span><span class="sb-label">Performance</span>
+    </a>
+    <a href="/student/academic-status.html" class="sb-link" data-tip="Academic Status">
+      <span class="sb-ico">🚦</span><span class="sb-label">Academic Status</span>
+    </a>
+
+    <div class="sb-section-title">Support</div>
+    <a href="/student/interventions.html" class="sb-link" data-tip="Interventions">
+      <span class="sb-ico">🤝</span><span class="sb-label">Interventions</span>
+    </a>
+    <a href="/student/notifications.html" class="sb-link" data-tip="Notifications">
+      <span class="sb-ico">🔔</span><span class="sb-label">Notifications</span>
+    </a>
+    <a href="/student/support.html" class="sb-link" data-tip="Support">
+      <span class="sb-ico">💬</span><span class="sb-label">Support</span>
+    </a>
+
+    <div class="sb-section-title">Account</div>
+    <a href="/student/id-card.html" class="sb-link" data-tip="ID Card">
+      <span class="sb-ico">🪪</span><span class="sb-label">ID Card</span>
+    </a>
+    <a href="/student/profile.html" class="sb-link" data-tip="Profile">
+      <span class="sb-ico">👤</span><span class="sb-label">Profile</span>
+    </a>
+  </nav>
+
+  <!-- Footer / Logout -->
+  <div class="sb-footer">
+    <a href="#" class="sb-logout" data-logout data-tip="Logout">
+      <span class="sb-ico">🚪</span><span class="sb-label">Logout</span>
+    </a>
+  </div>
+</aside>
+
+<!-- Mobile backdrop -->
+<div class="sb-backdrop" data-toggle-sidebar></div>
