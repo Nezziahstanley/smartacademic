@@ -1,12 +1,15 @@
 ﻿// ============================================================
 // SMARTACADEMIC — User Model
-// All SQL for the `users`, `roles`, `students`, `lecturers`,
-// and `departments` tables related to account management.
+// SQL helpers for users, roles, students, lecturers, departments.
 // ============================================================
 
 'use strict';
 
 const db = require('../config/db');
+
+/* ============================================================
+   USER LOOKUPS
+   ============================================================ */
 
 /**
  * Find a user by email (case-insensitive), joined with role name.
@@ -15,7 +18,7 @@ async function findByEmail(email) {
   const result = await db.query(
     `SELECT u.id, u.full_name, u.email, u.phone, u.password_hash,
             u.is_active, u.must_change_pw, u.role_id,
-            r.name AS role_name
+            r.name AS role_name, u.photo_url
        FROM users u
        JOIN roles r ON r.id = u.role_id
       WHERE LOWER(u.email) = LOWER($1)
@@ -32,7 +35,8 @@ async function findById(id) {
   const result = await db.query(
     `SELECT u.id, u.full_name, u.email, u.phone,
             u.is_active, u.must_change_pw, u.role_id,
-            r.name AS role_name
+            r.name AS role_name, u.photo_url,
+            u.last_login_at, u.created_at, u.updated_at
        FROM users u
        JOIN roles r ON r.id = u.role_id
       WHERE u.id = $1
@@ -41,6 +45,10 @@ async function findById(id) {
   );
   return result.rows[0] || null;
 }
+
+/* ============================================================
+   USER CREATION
+   ============================================================ */
 
 /**
  * Create a new user account.
@@ -56,6 +64,10 @@ async function createUser({ full_name, email, phone, password_hash, role_id }) {
   return result.rows[0];
 }
 
+/* ============================================================
+   ROLES
+   ============================================================ */
+
 /**
  * Get role id by name (e.g., 'student', 'lecturer', 'admin', 'hod').
  */
@@ -66,6 +78,10 @@ async function getRoleIdByName(name) {
   );
   return result.rows[0] ? result.rows[0].id : null;
 }
+
+/* ============================================================
+   PASSWORD & LOGIN
+   ============================================================ */
 
 /**
  * Update password hash for a user.
@@ -87,9 +103,12 @@ async function touchLastLogin(userId) {
   );
 }
 
+/* ============================================================
+   STUDENTS
+   ============================================================ */
+
 /**
  * List students (with user + department + programme info).
- * Used by admin user management.
  */
 async function listStudents({ departmentId = null, search = null, limit = 100, offset = 0 } = {}) {
   const params = [];
@@ -136,6 +155,10 @@ async function createStudentProfile({ user_id, matric_no, department_id, program
   return result.rows[0];
 }
 
+/* ============================================================
+   LECTURERS
+   ============================================================ */
+
 /**
  * Create a lecturer profile linked to a user.
  */
@@ -148,6 +171,10 @@ async function createLecturerProfile({ user_id, staff_id, department_id, title }
   );
   return result.rows[0];
 }
+
+/* ============================================================
+   VALIDATION HELPERS
+   ============================================================ */
 
 /**
  * Check if department exists.
@@ -166,30 +193,75 @@ async function programmeExists(id) {
 }
 
 /**
- * Check if matric number or staff id is already taken.
+ * Check if matric number is already taken.
  */
 async function matricExists(matric_no) {
   const r = await db.query('SELECT 1 FROM students WHERE matric_no = $1', [matric_no]);
   return r.rows.length > 0;
 }
 
+/**
+ * Check if staff id is already taken.
+ */
 async function staffIdExists(staff_id) {
   const r = await db.query('SELECT 1 FROM lecturers WHERE staff_id = $1', [staff_id]);
   return r.rows.length > 0;
 }
 
+/* ============================================================
+   PROFILE PHOTO
+   ============================================================ */
+
+/**
+ * Update user's photo (base64 data URL).
+ */
+async function updatePhoto(userId, photoUrl) {
+  await db.query(
+    'UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2',
+    [photoUrl, userId]
+  );
+}
+
+/**
+ * Remove user's photo.
+ */
+async function removePhoto(userId) {
+  await db.query(
+    'UPDATE users SET photo_url = NULL, updated_at = NOW() WHERE id = $1',
+    [userId]
+  );
+}
+
+/* ============================================================
+   EXPORTS
+   ============================================================ */
 module.exports = {
+  // Lookups
   findByEmail,
   findById,
+
+  // Creation
   createUser,
   getRoleIdByName,
+
+  // Password & login
   updatePassword,
   touchLastLogin,
+
+  // Students
   listStudents,
   createStudentProfile,
+
+  // Lecturers
   createLecturerProfile,
+
+  // Validation
   departmentExists,
   programmeExists,
   matricExists,
   staffIdExists,
+
+  // Photo
+  updatePhoto,
+  removePhoto,
 };

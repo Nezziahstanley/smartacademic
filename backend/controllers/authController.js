@@ -1,7 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Authentication Controller
 // Handles register (student / lecturer), login, me, logout,
-// forgot-password, reset-password.
+// forgot-password, reset-password, invite, accept-invite.
 // ============================================================
 
 'use strict';
@@ -15,9 +15,11 @@ const userModel = require('../models/userModel');
 const { AppError } = require('../middleware/errorHandler');
 const { signToken } = require('../middleware/auth');
 
-// In-memory store for reset tokens (dev only).
+// In-memory store for password reset tokens (dev only).
 // In production, replace with a `password_resets` table.
 const resetTokens = new Map();
+
+// In-memory store for invitation tokens (dev only).
 const inviteStore = new Map();
 
 // ============================================================
@@ -80,13 +82,13 @@ async function register(req, res, next) {
     const role_id = await userModel.getRoleIdByName(role);
     if (!role_id) throw new AppError('Role not found.', 500);
 
-    // Insert user
-    const { id: user_id } = await db.query(
+    // Create user as INACTIVE — pending admin approval
+    const user_id = await db.query(
       `INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
-      VALUES ($1, $2, $3, $4, $5, FALSE)
-      RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, FALSE)
+       RETURNING id`,
       [full_name, email.toLowerCase(), phone || null, password_hash, role_id]
-    ).then(r => r.rows[0]);
+    ).then(r => r.rows[0].id);
 
     // Insert profile
     if (role === 'student') {
@@ -100,19 +102,28 @@ async function register(req, res, next) {
       });
     }
 
-    // Fetch full user (with role name) and issue token
+    // Notify admins
+    try {
+      const admins = await db.query(`
+        SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id
+         WHERE r.name = 'admin' AND u.is_active = TRUE
+      `);
+      for (const a of admins.rows) {
+        await db.query(`
+          INSERT INTO notifications (user_id, title, message, type)
+          VALUES ($1, 'New student registration pending', $2, 'system')
+        `, [a.id, `${full_name} (${email}) has registered and is awaiting your approval.`]);
+      }
+    } catch (e) { /* ignore */ }
+
     const user = await userModel.findById(user_id);
-    const token = signToken(user);
 
-  res.status(201).json({
-    success: true,
-    message: 'Registration successful! Your account is pending admin approval. You will be notified via email once it is active.',
-    data: { user: sanitizeUser(user), pending: true },
-  });
-
-  } catch (err) {
-    next(err);
-  }
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Your account is pending admin approval. You will be notified via email once it is active.',
+      data: { user: sanitizeUser(user), pending: true },
+    });
+  } catch (err) { next(err); }
 }
 
 // ============================================================
@@ -141,22 +152,20 @@ async function login(req, res, next) {
         token,
       },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 // ============================================================
-// ME  (returns current user from JWT)
+// ME — returns current user from JWT
 // ============================================================
 async function me(req, res, next) {
   try {
-    // req.user is set by requireAuth
     const user = await userModel.findById(req.user.id);
     if (!user) throw new AppError('User not found.', 404);
 
-    // Attach role-specific profile (student / lecturer)
+    // Attach role-specific profile
     let profile = null;
+
     if (user.role_name === 'student') {
       const r = await db.query(
         `SELECT s.id, s.matric_no, s.level, s.admission_year,
@@ -196,9 +205,7 @@ async function me(req, res, next) {
         profile,
       },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 // ============================================================
@@ -230,8 +237,6 @@ async function forgotPassword(req, res, next) {
       expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
     });
 
-    // In production: send email with reset link.
-    // In dev: log the link to the console.
     const resetLink = `${env.CLIENT_URL}/reset-password.html?token=${token}`;
     if (env.isDevelopment) {
       console.log('');
@@ -245,12 +250,9 @@ async function forgotPassword(req, res, next) {
     res.json({
       success: true,
       message: 'If that email exists, a reset link has been sent.',
-      // Include token in dev so you can test without email
       ...(env.isDevelopment ? { dev_token: token, dev_link: resetLink } : {}),
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 // ============================================================
@@ -270,29 +272,17 @@ async function resetPassword(req, res, next) {
     resetTokens.delete(token);
 
     res.json({ success: true, message: 'Password has been reset. You can now log in.' });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 // ============================================================
-// HELPERS
+// SEND INVITE
 // ============================================================
-function sanitizeUser(user) {
-  return {
-    id:             user.id,
-    full_name:      user.full_name,
-    email:          user.email,
-    phone:          user.phone,
-    role:           user.role_name,
-    is_active:      user.is_active,
-    must_change_pw: user.must_change_pw || false,
-  };
-}
-
-/* ============================================================
-   SEND INVITE
-   ============================================================ */
+/**
+ * POST /api/auth/invite
+ * Body: { email, full_name, role }
+ * Sends an email with a unique registration link.
+ */
 async function sendInvite(req, res, next) {
   try {
     const { email, full_name, role = 'student' } = req.body;
@@ -301,37 +291,39 @@ async function sendInvite(req, res, next) {
     const existing = await userModel.findByEmail(email);
     if (existing) throw new AppError('This email is already registered.', 409);
 
-    const crypto = require('crypto');
     const token = crypto.randomBytes(24).toString('hex');
     inviteStore.set(token, {
       email: email.toLowerCase(),
       full_name: full_name || '',
       role,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
       created_by: req.user.id,
     });
 
     const link = `${env.CLIENT_URL}/register.html?invite=${token}`;
-    const emailService = require('../services/emailService');
 
+    const emailService = require('../services/emailService');
     try {
       await emailService.send({
         to: email,
         subject: "You're invited to SMARTACADEMIC",
         html: `
           <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">
-            <div style="background:#4f46e5;padding:24px;border-radius:12px 12px 0 0;color:#fff;text-align:center;">
+            <div style="background:#166534;padding:24px;border-radius:12px 12px 0 0;color:#fff;text-align:center;">
               <h1 style="margin:0;">SMARTACADEMIC</h1>
+              <p style="margin:4px 0 0;opacity:.9;">Federal Polytechnic, Ugep</p>
             </div>
             <div style="background:#fff;padding:30px;border-radius:0 0 12px 12px;">
               <p>Hi${full_name ? ' ' + full_name : ''},</p>
               <p>You have been invited to join SMARTACADEMIC as a <strong>${role}</strong>.</p>
+              <p>Click the button below to complete your registration:</p>
               <p style="text-align:center;margin:26px 0;">
-                <a href="${link}" style="background:#4f46e5;color:#fff;padding:14px 30px;text-decoration:none;border-radius:10px;font-weight:700;">
+                <a href="${link}" style="background:#166534;color:#fff;padding:14px 30px;text-decoration:none;border-radius:10px;font-weight:700;">
                   Complete Registration
                 </a>
               </p>
               <p style="color:#64748b;font-size:13px;">This link expires in 7 days.</p>
+              <p style="color:#94a3b8;font-size:12px;margin-top:20px;">— SMARTACADEMIC Team</p>
             </div>
           </div>`,
       });
@@ -350,9 +342,9 @@ async function sendInvite(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   ACCEPT INVITE
-   ============================================================ */
+// ============================================================
+// ACCEPT INVITE
+// ============================================================
 async function acceptInvite(req, res, next) {
   try {
     const {
@@ -374,12 +366,14 @@ async function acceptInvite(req, res, next) {
     const password_hash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
     const role_id = await userModel.getRoleIdByName(entry.role);
 
+    // Create user directly ACTIVE
     const user = await db.query(`
       INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
       VALUES ($1, $2, $3, $4, $5, TRUE)
       RETURNING id
     `, [full_name || entry.full_name, entry.email, phone || null, password_hash, role_id]).then(r => r.rows[0]);
 
+    // Create profile
     if (entry.role === 'student') {
       await userModel.createStudentProfile({
         user_id: user.id,
@@ -411,6 +405,25 @@ async function acceptInvite(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ============================================================
+// HELPERS
+// ============================================================
+function sanitizeUser(user) {
+  return {
+    id:             user.id,
+    full_name:      user.full_name,
+    email:          user.email,
+    phone:          user.phone,
+    role:           user.role_name,
+    is_active:      user.is_active,
+    must_change_pw: user.must_change_pw || false,
+    photo_url:      user.photo_url || null,
+  };
+}
+
+// ============================================================
+// EXPORTS
+// ============================================================
 module.exports = {
   register,
   login,
