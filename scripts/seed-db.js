@@ -13,12 +13,18 @@ const bcrypt  = require('bcryptjs');
 const { Pool } = require('pg');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+const useSSL =
+  process.env.NODE_ENV === 'production' ||
+  (process.env.DB_HOST && process.env.DB_HOST.includes('neon.tech')) ||
+  process.env.DB_SSL === 'true';
+
 const pool = new Pool({
   host:     process.env.DB_HOST || 'localhost',
   port:     parseInt(process.env.DB_PORT || '5432', 10),
   user:     process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'smartacademic',
+  ssl:      useSSL ? { rejectUnauthorized: false } : false,
 });
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '10', 10);

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // SMARTACADEMIC — Database Reset
 // Drops the entire database, recreates it, runs schema, seeds.
 // Usage: npm run reset-db

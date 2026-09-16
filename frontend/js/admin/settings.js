@@ -1,65 +1,136 @@
-﻿'use strict';
+﻿// ============================================================
+// SMARTACADEMIC — Admin Settings Page Logic
+// Self-contained: fetches settings, tracks changes, saves.
+// ============================================================
+
+'use strict';
+
 (function () {
-  const { $, api, esc } = window.SACrud;
-  let dirty = {}; // key → value
+  const token = localStorage.getItem('sa_token');
 
-  const GROUP_LABELS = {
-    general: 'General',
-    academic: 'Academic',
-    attendance: 'Attendance',
-    assessment: 'Assessment',
-    risk: 'Risk Thresholds',
-  };
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(path, {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      ...opts,
+    });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, data };
+  }
 
+  const dirty = {};
+
+  /* ---------- Load settings ---------- */
   async function load() {
-    const { ok, data } = await api('/api/admin/settings');
-    if (!ok) return;
-
-    const grouped = {};
+    const { ok, data } = await apiFetch('/api/admin/settings');
+    if (!ok) {
+      console.error('[settings] Failed to load:', data);
+      return;
+    }
     data.data.forEach(s => {
-      const g = s.category || 'general';
-      (grouped[g] = grouped[g] || []).push(s);
+      const el = document.querySelector(`[data-key="${s.key}"]`);
+      if (el) el.value = s.value ?? '';
     });
 
-    const order = ['general', 'academic', 'attendance', 'assessment', 'risk'];
-    $('#groups').innerHTML = order
-      .filter(g => grouped[g])
-      .map(g => `
-        <div class="card mb-4">
-          <div class="card-header"><div><h3>${esc(GROUP_LABELS[g] || g)}</h3></div></div>
-          ${grouped[g].map(s => `
-            <div class="field">
-              <label>${esc(s.description || s.key)}</label>
-              <input class="input" data-key="${esc(s.key)}" value="${esc(s.value)}" />
-              <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Key: ${esc(s.key)}</div>
-            </div>`).join('')}
-        </div>`).join('');
+    // Load sessions
+    const sess = await apiFetch('/api/admin/sessions');
+    if (sess.ok) {
+      const sel = document.querySelector('[data-key="current_session_id"]');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— Select session —</option>' +
+        sess.data.data.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+      sel.value = current;
+    }
 
-    document.querySelectorAll('[data-key]').forEach(input => {
-      input.addEventListener('input', e => {
-        dirty[e.target.dataset.key] = e.target.value;
+    // Load semesters
+    const sem = await apiFetch('/api/admin/semesters');
+    if (sem.ok) {
+      const sel = document.querySelector('[data-key="current_semester_id"]');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— Select semester —</option>' +
+        sem.data.data.map(x => `<option value="${x.id}">${x.session_name} — ${x.name}</option>`).join('');
+      sel.value = current;
+    }
+
+    console.log('[settings] loaded');
+  }
+
+  /* ---------- Track dirty fields ---------- */
+  function bindDirtyTracking() {
+    document.querySelectorAll('[data-key]').forEach(el => {
+      const handler = () => { dirty[el.dataset.key] = el.value; };
+      el.addEventListener('input', handler);
+      el.addEventListener('change', handler);
+    });
+  }
+
+  /* ---------- Save ---------- */
+  async function saveAll() {
+    const items = Object.entries(dirty).map(([key, value]) => ({ key, value }));
+    const msgEl = document.getElementById('saveMsg');
+
+    if (!items.length) {
+      msgEl.className = 'msg msg-info show';
+      msgEl.textContent = 'No changes to save.';
+      setTimeout(() => msgEl.className = 'msg', 2500);
+      return;
+    }
+
+    const btn = document.getElementById('btnSave');
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+
+    try {
+      const res = await apiFetch('/api/admin/settings/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      });
+
+      if (!res.ok) {
+        msgEl.className = 'msg msg-error show';
+        msgEl.textContent = res.data?.error || 'Failed to save.';
+        return;
+      }
+
+      msgEl.className = 'msg msg-success show';
+      msgEl.textContent = `✅ ${res.data.message || items.length + ' settings saved.'}`;
+      Object.keys(dirty).forEach(k => delete dirty[k]);
+      setTimeout(() => msgEl.className = 'msg', 3000);
+    } catch (err) {
+      msgEl.className = 'msg msg-error show';
+      msgEl.textContent = 'Network error: ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '💾 Save All Changes';
+    }
+  }
+
+  /* ---------- Tabs ---------- */
+  function bindTabs() {
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
       });
     });
   }
 
-  async function save() {
-    const items = Object.entries(dirty).map(([key, value]) => ({ key, value }));
-    if (!items.length) { toast('No changes'); return; }
-    const btn = $('#btnSave');
-    btn.disabled = true;
-    const { ok, data } = await api('/api/admin/settings/bulk', { method: 'POST', body: JSON.stringify({ items }) });
-    btn.disabled = false;
-    if (!ok) { alert(data?.error || 'Failed'); return; }
-    const msg = $('#msg');
-    msg.className = 'msg msg-success show';
-    msg.textContent = data.message || 'Settings saved.';
-    dirty = {};
-    setTimeout(() => { msg.className = 'msg'; }, 3000);
+  /* ---------- Boot ---------- */
+  function boot() {
+    if (window.__settingsBooted) return;
+    window.__settingsBooted = true;
+    console.log('[settings] booting...');
+    bindTabs();
+    bindDirtyTracking();
+    const btn = document.getElementById('btnSave');
+    if (btn) btn.addEventListener('click', saveAll);
+    load();
   }
 
-  function boot() {
-    load();
-    $('#btnSave').addEventListener('click', save);
-  }
   document.addEventListener('sa:layout-ready', boot);
+  setTimeout(boot, 1000); // fallback
 })();

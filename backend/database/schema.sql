@@ -1,13 +1,13 @@
 -- ============================================================
 -- SMARTACADEMIC — PostgreSQL Database Schema
--- Version: 1.0
--- Author: SMARTACADEMIC Project
--- Description: Full schema for academic early-warning system
+-- Version: 1.1
+-- Description: Full schema for Federal Polytechnic, Ugep
+--              academic early-warning system.
 -- Run via: node scripts/init-db.js
 -- ============================================================
 
 -- ============================================================
--- 0. CLEAN SLATE (safe for dev only — comments out in prod)
+-- 0. CLEAN SLATE (safe for dev — comment out in production)
 -- ============================================================
 DROP TABLE IF EXISTS audit_logs            CASCADE;
 DROP TABLE IF EXISTS notifications         CASCADE;
@@ -29,9 +29,6 @@ DROP TABLE IF EXISTS programmes            CASCADE;
 DROP TABLE IF EXISTS departments           CASCADE;
 DROP TABLE IF EXISTS users                 CASCADE;
 DROP TABLE IF EXISTS roles                 CASCADE;
-
--- Enable UUID generation if needed later (optional)
--- CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
 -- 1. ROLES
@@ -58,6 +55,7 @@ CREATE TABLE users (
   role_id        INT NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
   must_change_pw BOOLEAN NOT NULL DEFAULT FALSE,
+  photo_url      TEXT,
   last_login_at  TIMESTAMPTZ,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -84,7 +82,7 @@ CREATE TABLE departments (
 
 CREATE INDEX idx_departments_hod ON departments(hod_id);
 
-COMMENT ON TABLE departments IS 'Academic departments (e.g., Computer Science)';
+COMMENT ON TABLE departments IS 'Academic departments and schools';
 
 -- ============================================================
 -- 4. PROGRAMMES
@@ -103,10 +101,10 @@ CREATE TABLE programmes (
 
 CREATE INDEX idx_programmes_dept ON programmes(department_id);
 
-COMMENT ON TABLE programmes IS 'Degree programmes under each department';
+COMMENT ON TABLE programmes IS 'ND/HND programmes under each department';
 
 -- ============================================================
--- 5. LECTURERS  (profile for users with role=lecturer)
+-- 5. LECTURERS
 -- ============================================================
 CREATE TABLE lecturers (
   id             SERIAL PRIMARY KEY,
@@ -124,29 +122,37 @@ CREATE INDEX idx_lecturers_dept ON lecturers(department_id);
 COMMENT ON TABLE lecturers IS 'Lecturer profiles linked to users';
 
 -- ============================================================
--- 6. STUDENTS  (profile for users with role=student)
+-- 6. STUDENTS
 -- ============================================================
 CREATE TABLE students (
-  id             SERIAL PRIMARY KEY,
-  user_id        INT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  matric_no      VARCHAR(30) UNIQUE NOT NULL,
-  department_id  INT NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
-  programme_id   INT NOT NULL REFERENCES programmes(id) ON DELETE RESTRICT,
-  level          INT NOT NULL CHECK (level BETWEEN 100 AND 700),
-  admission_year INT NOT NULL,
-  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                SERIAL PRIMARY KEY,
+  user_id           INT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  matric_no         VARCHAR(30) UNIQUE NOT NULL,
+  department_id     INT NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
+  programme_id      INT NOT NULL REFERENCES programmes(id) ON DELETE RESTRICT,
+  level             INT NOT NULL CHECK (level BETWEEN 100 AND 700),
+  admission_year    INT NOT NULL,
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+
+  -- Fee tracking
+  school_fees_paid      BOOLEAN NOT NULL DEFAULT FALSE,
+  school_fees_paid_at   TIMESTAMPTZ,
+  school_fees_amount    NUMERIC(10,2),
+  school_fees_receipt_no VARCHAR(50),
+
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_students_dept      ON students(department_id);
 CREATE INDEX idx_students_programme ON students(programme_id);
 CREATE INDEX idx_students_level     ON students(level);
+CREATE INDEX idx_students_fees      ON students(school_fees_paid);
 
 COMMENT ON TABLE students IS 'Student profiles linked to users';
 
 -- ============================================================
--- 7. SESSIONS  (academic sessions, e.g. 2024/2025)
+-- 7. SESSIONS
 -- ============================================================
 CREATE TABLE sessions (
   id          SERIAL PRIMARY KEY,
@@ -158,14 +164,13 @@ CREATE TABLE sessions (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Only one session can be active at a time
 CREATE UNIQUE INDEX idx_sessions_single_active
   ON sessions(is_active) WHERE is_active = TRUE;
 
-COMMENT ON TABLE sessions IS 'Academic sessions (e.g. 2024/2025)';
+COMMENT ON TABLE sessions IS 'Academic sessions (e.g., 2024/2025)';
 
 -- ============================================================
--- 8. SEMESTERS  (First / Second within a session)
+-- 8. SEMESTERS
 -- ============================================================
 CREATE TABLE semesters (
   id          SERIAL PRIMARY KEY,
@@ -182,7 +187,6 @@ CREATE TABLE semesters (
 
 CREATE INDEX idx_semesters_session ON semesters(session_id);
 
--- Only one semester can be active at a time
 CREATE UNIQUE INDEX idx_semesters_single_active
   ON semesters(is_active) WHERE is_active = TRUE;
 
@@ -190,10 +194,12 @@ COMMENT ON TABLE semesters IS 'Semesters within a session';
 
 -- ============================================================
 -- 9. COURSES
+-- ⚠️ NO UNIQUE constraint on code — same code can exist for
+--    multiple programmes (e.g., MTH 111 for CEN, CIV, EEE, CSC).
 -- ============================================================
 CREATE TABLE courses (
   id             SERIAL PRIMARY KEY,
-  code           VARCHAR(15) UNIQUE NOT NULL,
+  code           VARCHAR(20) NOT NULL,
   title          VARCHAR(150) NOT NULL,
   units          INT NOT NULL CHECK (units BETWEEN 1 AND 6),
   department_id  INT NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
@@ -208,11 +214,13 @@ CREATE TABLE courses (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX idx_courses_code     ON courses(code);
 CREATE INDEX idx_courses_dept     ON courses(department_id);
 CREATE INDEX idx_courses_lecturer ON courses(lecturer_id);
 CREATE INDEX idx_courses_level    ON courses(level);
+CREATE INDEX idx_courses_prog     ON courses(programme_id);
 
-COMMENT ON TABLE courses IS 'Course catalogue';
+COMMENT ON TABLE courses IS 'Course catalogue (multiple programmes can share a code)';
 
 -- ============================================================
 -- 10. COURSE REGISTRATIONS
@@ -225,18 +233,25 @@ CREATE TABLE course_registrations (
   semester_id  INT NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
   status       VARCHAR(15) NOT NULL DEFAULT 'registered'
                CHECK (status IN ('registered','approved','dropped')),
+
   registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  approved_at   TIMESTAMPTZ,
+  approved_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  dropped_at    TIMESTAMPTZ,
+  dropped_by    INT REFERENCES users(id) ON DELETE SET NULL,
+
   UNIQUE (student_id, course_id, session_id, semester_id)
 );
 
 CREATE INDEX idx_reg_student  ON course_registrations(student_id);
 CREATE INDEX idx_reg_course   ON course_registrations(course_id);
 CREATE INDEX idx_reg_session  ON course_registrations(session_id, semester_id);
+CREATE INDEX idx_reg_status   ON course_registrations(status);
 
 COMMENT ON TABLE course_registrations IS 'Courses each student has registered for';
 
 -- ============================================================
--- 11. CLASS SESSIONS  (a specific class meeting)
+-- 11. CLASS SESSIONS
 -- ============================================================
 CREATE TABLE class_sessions (
   id           SERIAL PRIMARY KEY,
@@ -277,7 +292,7 @@ CREATE INDEX idx_attendance_session ON attendance(class_session_id);
 COMMENT ON TABLE attendance IS 'Attendance record per student per class session';
 
 -- ============================================================
--- 13. ASSESSMENTS  (assignment / test / CA / exam)
+-- 13. ASSESSMENTS
 -- ============================================================
 CREATE TABLE assessments (
   id           SERIAL PRIMARY KEY,
@@ -320,7 +335,7 @@ CREATE INDEX idx_scores_assessment ON scores(assessment_id);
 COMMENT ON TABLE scores IS 'Individual student scores per assessment';
 
 -- ============================================================
--- 15. RESULTS  (computed per student per course per semester)
+-- 15. RESULTS
 -- ============================================================
 CREATE TABLE results (
   id           SERIAL PRIMARY KEY,
@@ -345,7 +360,7 @@ CREATE INDEX idx_results_session ON results(session_id, semester_id);
 COMMENT ON TABLE results IS 'Final computed results per student per course';
 
 -- ============================================================
--- 16. RISK ASSESSMENTS  (output of Risk Engine)
+-- 16. RISK ASSESSMENTS
 -- ============================================================
 CREATE TABLE risk_assessments (
   id                SERIAL PRIMARY KEY,
@@ -458,7 +473,7 @@ CREATE INDEX idx_audit_date   ON audit_logs(created_at DESC);
 COMMENT ON TABLE audit_logs IS 'Immutable activity log for compliance';
 
 -- ============================================================
--- 20. SETTINGS  (key/value configuration)
+-- 20. SETTINGS
 -- ============================================================
 CREATE TABLE settings (
   key         VARCHAR(60) PRIMARY KEY,
@@ -469,7 +484,7 @@ CREATE TABLE settings (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE settings IS 'Configurable system settings (grading, thresholds, etc.)';
+COMMENT ON TABLE settings IS 'Configurable system settings';
 
 -- ============================================================
 -- 21. TRIGGER — auto-update updated_at
@@ -507,33 +522,34 @@ END $$;
 -- 22. DEFAULT SETTINGS ROWS
 -- ============================================================
 INSERT INTO settings (key, value, category, description) VALUES
-  ('institution_name',        'SMARTACADEMIC University',       'general',      'Name of the institution'),
-  ('institution_email',       'info@smartacademic.edu',         'general',      'Contact email'),
-  ('current_session_id',      '',                                'academic',     'Active session ID'),
-  ('current_semester_id',     '',                                'academic',     'Active semester ID'),
-  ('attendance_threshold',    '75',                              'attendance',   'Minimum attendance % required'),
-  ('attendance_warning',      '70',                              'attendance',   'Attendance % that triggers a warning'),
-  ('ca_threshold',            '50',                              'assessment',   'Minimum CA average %'),
-  ('exam_threshold',          '40',                              'assessment',   'Minimum exam average %'),
-  ('risk_weight_attendance',  '25',                              'risk',         'Weight (%) for attendance in risk score'),
-  ('risk_weight_ca',          '20',                              'risk',         'Weight (%) for CA in risk score'),
-  ('risk_weight_exam',        '20',                              'risk',         'Weight (%) for exam in risk score'),
-  ('risk_weight_failed',      '20',                              'risk',         'Weight (%) for failed courses'),
-  ('risk_weight_gpa_decline', '15',                              'risk',         'Weight (%) for GPA decline'),
-  ('risk_yellow_min',         '25',                              'risk',         'Min score for YELLOW'),
-  ('risk_orange_min',         '50',                              'risk',         'Min score for ORANGE'),
-  ('risk_red_min',            '75',                              'risk',         'Min score for RED')
-ON CONFLICT (key) DO NOTHING;
+  ('institution_name',         'Federal Polytechnic, Ugep',          'general',      'Institution name'),
+  ('institution_email',        'chosenmopol2003@gmail.com',          'general',      'Contact email'),
+  ('institution_phone',        '+234 901 616 2662',                  'general',      'Contact phone'),
+  ('institution_address',      'Ugep, Cross River State, Nigeria',   'general',      'Address'),
+  ('timezone',                 'Africa/Lagos',                       'general',      'Default timezone'),
 
--- ============================================================
--- 23. GRADING SCALE (used by result engine — informational)
--- ============================================================
--- A  : 70-100 → 5.0
--- B  : 60-69  → 4.0
--- C  : 50-59  → 3.0
--- D  : 45-49  → 2.0
--- E  : 40-44  → 1.0
--- F  : 0-39   → 0.0
+  ('max_credit_units',         '20',                                 'academic',     'Max credit units per semester'),
+  ('min_credit_units',         '15',                                 'academic',     'Min credit units per semester'),
+  ('registration_window_days', '14',                                 'academic',     'Registration window'),
+  ('allow_late_registration',  'true',                               'academic',     'Allow late registration'),
+
+  ('attendance_threshold',     '75',                                 'attendance',   'Minimum attendance %'),
+  ('attendance_warning',       '70',                                 'attendance',   'Warning threshold'),
+  ('attendance_critical',      '50',                                 'attendance',   'Critical threshold'),
+  ('excused_as_present',       'false',                              'attendance',   'Count excused as present'),
+
+  ('ca_threshold',             '50',                                 'assessment',   'Min CA average %'),
+  ('exam_threshold',           '40',                                 'assessment',   'Min exam average %'),
+
+  ('risk_weight_attendance',   '25',                                 'risk',         'Attendance weight %'),
+  ('risk_weight_ca',           '20',                                 'risk',         'CA weight %'),
+  ('risk_weight_exam',         '20',                                 'risk',         'Exam weight %'),
+  ('risk_weight_failed',       '20',                                 'risk',         'Failed courses weight %'),
+  ('risk_weight_gpa_decline',  '15',                                 'risk',         'GPA decline weight %'),
+  ('risk_yellow_min',          '25',                                 'risk',         'Min score for YELLOW'),
+  ('risk_orange_min',          '50',                                 'risk',         'Min score for ORANGE'),
+  ('risk_red_min',             '75',                                 'risk',         'Min score for RED')
+ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- END OF SCHEMA

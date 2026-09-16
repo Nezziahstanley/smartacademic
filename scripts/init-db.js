@@ -13,6 +13,14 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const DB_NAME = process.env.DB_NAME || 'smartacademic';
 
+// Detect SSL requirement (Neon, Supabase, etc.)
+const useSSL =
+  process.env.NODE_ENV === 'production' ||
+  (process.env.DB_HOST && process.env.DB_HOST.includes('neon.tech')) ||
+  process.env.DB_SSL === 'true';
+
+const sslConfig = useSSL ? { rejectUnauthorized: false } : false;
+
 // Connection to the default "postgres" DB (needed to CREATE DATABASE)
 const adminConfig = {
   host:     process.env.DB_HOST || 'localhost',
@@ -20,6 +28,7 @@ const adminConfig = {
   user:     process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
   database: 'postgres',
+  ssl:      sslConfig,
 };
 
 // Connection to the target DB (needed to run schema.sql)
