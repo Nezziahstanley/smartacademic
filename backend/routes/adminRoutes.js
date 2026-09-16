@@ -376,4 +376,12 @@ router.post('/submissions/:id/reject',
 router.put('/profile', asyncHandler(adminController.updateOwnProfile));
 router.post('/change-password', asyncHandler(adminController.changeOwnPassword));
 
+/* ============ PROFILE PHOTO ============ */
+router.post('/profile/photo',
+  asyncHandler(adminController.uploadOwnPhoto)
+);
+router.delete('/profile/photo',
+  asyncHandler(adminController.removeOwnPhoto)
+);
+
 module.exports = router;

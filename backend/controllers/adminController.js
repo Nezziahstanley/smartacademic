@@ -489,7 +489,56 @@ async function listRegistrationsEnhanced(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   PROFILE PHOTO UPLOAD (for admin's own profile)
+   ============================================================ */
+async function uploadOwnPhoto(req, res, next) {
+  try {
+    const { photo } = req.body;
+    if (!photo || !photo.startsWith('data:image/')) {
+      throw new AppError('Invalid image. Must be a data URL.', 400);
+    }
+
+    // Limit size — data URLs of 5MB images become ~7MB strings
+    if (photo.length > 8_000_000) {
+      throw new AppError('Image too large. Max ~2 MB after compression.', 400);
+    }
+
+    // Ensure column exists (idempotent)
+    await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+
+    await db.query(
+      'UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2',
+      [photo, req.user.id]
+    );
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'update_own_photo',
+      module: 'profile',
+      affected_record: `user:${req.user.id}`,
+    });
+
+    res.json({ success: true, message: 'Photo updated.' });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
+   REMOVE PROFILE PHOTO
+   ============================================================ */
+async function removeOwnPhoto(req, res, next) {
+  try {
+    await db.query(
+      'UPDATE users SET photo_url = NULL, updated_at = NOW() WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({ success: true, message: 'Photo removed.' });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
+  uploadOwnPhoto,
+  removeOwnPhoto,
   getDashboard,
   listUsers,
   getUser,

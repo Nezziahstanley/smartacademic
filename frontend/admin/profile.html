@@ -24,6 +24,52 @@
           </div>
         </div>
 
+        <!-- ============ PROFILE PHOTO ============ -->
+<div class="card mb-4">
+  <div class="card-header">
+    <div>
+      <h3>Profile Photo</h3>
+      <p>This photo appears in your topbar and on your ID card.</p>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+    <!-- Preview -->
+    <div id="photoPreview"
+         style="width:110px;height:110px;border-radius:50%;
+                background:linear-gradient(135deg,#166534,#ca8a04);
+                display:grid;place-items:center;color:#fff;
+                font-size:36px;font-weight:800;overflow:hidden;
+                background-size:cover;background-position:center;
+                border:3px solid #fff;
+                box-shadow:0 8px 24px rgba(22,101,52,.2);">
+      ?
+    </div>
+
+     <!-- Buttons -->
+    <div style="flex:1;min-width:240px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <button type="button" class="btn btn-primary" id="btnUploadPhoto">
+          📷 Upload New Photo
+        </button>
+        <button type="button" class="btn btn-ghost" id="btnRemovePhoto" style="display:none;">
+          🗑️ Remove
+        </button>
+        </div>
+          <p style="font-size:13px;color:var(--ink-3);line-height:1.6;margin:0;">
+            <strong>Requirements:</strong><br>
+            • Square image (JPG or PNG)<br>
+            • Max 2 MB<br>
+            • Recommended: 400×400 px or larger<br>
+            • Use a clear, front-facing photo
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="photoInput" accept="image/*" style="display:none;" />
+
         <div class="grid-2">
           <!-- Profile Card -->
           <div class="card">
@@ -83,6 +129,7 @@
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/profile.js"></script>
   <script>
     'use strict';
     (function () {
