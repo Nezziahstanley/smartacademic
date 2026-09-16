@@ -35,7 +35,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "https://cdn.jsdelivr.net"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       styleSrc:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc:    ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc:     ["'self'", "data:", "blob:", "https:"],
@@ -47,7 +47,7 @@ app.use(helmet({
       formAction: ["'self'"],
     },
   },
-  crossOriginEmbedderPolicy: false, // allows external images/videos
+  crossOriginEmbedderPolicy: false,
 }));
 
 app.use(cors({
