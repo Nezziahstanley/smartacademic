@@ -126,4 +126,29 @@ router.post('/change-password', asyncHandler(ctrl.changePassword));
 router.post('/profile/photo', asyncHandler(ctrl.uploadOwnPhoto));
 router.delete('/profile/photo', asyncHandler(ctrl.removeOwnPhoto));
 
+/* ============================================================
+   RESULT APPROVALS
+   ============================================================ */
+router.get('/result-submissions', asyncHandler(ctrl.listResultSubmissions));
+router.get('/result-submissions/:courseId',
+  param('courseId').isInt(),
+  validate,
+  asyncHandler(ctrl.getResultSubmissionDetail)
+);
+router.post('/result-submissions/:courseId/approve',
+  param('courseId').isInt(),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  validate,
+  asyncHandler(ctrl.approveResults)
+);
+router.post('/result-submissions/:courseId/return',
+  param('courseId').isInt(),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  body('reason').trim().notEmpty(),
+  validate,
+  asyncHandler(ctrl.returnResults)
+);
+
 module.exports = router;

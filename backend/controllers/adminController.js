@@ -536,6 +536,112 @@ async function removeOwnPhoto(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   PUBLISH RESULTS (Admin)
+   ============================================================ */
+
+/**
+ * GET /api/admin/publish/result-submissions
+ * Lists courses with approved results ready to publish.
+ */
+async function listPublishableResults(req, res, next) {
+  try {
+    const { status = 'approved' } = req.query;
+
+    const r = await db.query(`
+      SELECT c.id AS course_id, c.code, c.title,
+             d.name AS department_name,
+             sess.id AS session_id, sess.name AS session_name,
+             sem.id AS semester_id, sem.name AS semester_name,
+             COUNT(r.id)::int AS students,
+             MAX(r.is_published::int) AS published_count,
+             MAX(r.approved_at) AS approved_at
+        FROM results r
+        JOIN courses c ON c.id = r.course_id
+        JOIN departments d ON d.id = c.department_id
+        JOIN sessions sess ON sess.id = r.session_id
+        JOIN semesters sem ON sem.id = r.semester_id
+       WHERE r.submission_status = $1
+       GROUP BY c.id, c.code, c.title, d.name,
+                sess.id, sess.name, sem.id, sem.name
+       ORDER BY MAX(r.approved_at) DESC
+    `, [status]);
+
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/admin/publish/:courseId
+ * Publishes approved results for a course.
+ */
+async function publishResults(req, res, next) {
+  try {
+    const courseId = parseInt(req.params.courseId, 10);
+    const { session_id, semester_id } = req.body;
+
+    const upd = await db.query(`
+      UPDATE results
+         SET is_published = TRUE
+       WHERE course_id = $1
+         AND session_id = $2
+         AND semester_id = $3
+         AND submission_status = 'approved'
+         AND is_published = FALSE
+       RETURNING id
+    `, [courseId, session_id, semester_id]);
+
+    // Notify all students in this course
+    const students = await db.query(`
+      SELECT DISTINCT u.id
+        FROM results r
+        JOIN students s ON s.id = r.student_id
+        JOIN users u ON u.id = s.user_id
+       WHERE r.course_id = $1 AND r.session_id = $2 AND r.semester_id = $3
+    `, [courseId, session_id, semester_id]);
+
+    const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
+
+    for (const st of students.rows) {
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES ($1, 'Result published', $2, 'result')
+      `, [st.id, `Your result for ${course.rows[0].code} — ${course.rows[0].title} is now available.`]);
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'publish_results',
+      module: 'results',
+      affected_record: `course:${courseId}`,
+      details: { published: upd.rowCount },
+    });
+
+    res.json({ success: true, message: `${upd.rowCount} results published.` });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/admin/unpublish/:courseId
+ */
+async function unpublishResults(req, res, next) {
+  try {
+    const courseId = parseInt(req.params.courseId, 10);
+    const { session_id, semester_id } = req.body;
+
+    const upd = await db.query(`
+      UPDATE results
+         SET is_published = FALSE
+       WHERE course_id = $1
+         AND session_id = $2
+         AND semester_id = $3
+       RETURNING id
+    `, [courseId, session_id, semester_id]);
+
+    res.json({ success: true, message: `${upd.rowCount} results unpublished.` });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   uploadOwnPhoto,
   removeOwnPhoto,
@@ -556,4 +662,7 @@ module.exports = {
   markFeesPaid,
   markFeesUnpaid,
   listRegistrationsEnhanced,
+  listPublishableResults,
+  publishResults,
+  unpublishResults,
 };

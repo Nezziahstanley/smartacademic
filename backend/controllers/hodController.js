@@ -575,6 +575,180 @@ async function removeOwnPhoto(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   RESULT APPROVALS (HOD)
+   ============================================================ */
+
+/**
+ * GET /api/hod/result-submissions
+ * Returns submitted results grouped by course.
+ */
+async function listResultSubmissions(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const { status = 'submitted' } = req.query;
+
+    const r = await db.query(`
+      SELECT c.id AS course_id, c.code, c.title, c.level,
+             sess.id AS session_id, sess.name AS session_name,
+             sem.id AS semester_id, sem.name AS semester_name,
+             u.full_name AS lecturer_name,
+             COUNT(r.id)::int AS students,
+             MIN(r.submitted_at) AS submitted_at,
+             MAX(r.submission_status) AS submission_status
+        FROM results r
+        JOIN courses c ON c.id = r.course_id
+        JOIN sessions sess ON sess.id = r.session_id
+        JOIN semesters sem ON sem.id = r.semester_id
+        LEFT JOIN lecturers l ON l.id = c.lecturer_id
+        LEFT JOIN users u ON u.id = l.user_id
+       WHERE c.department_id = $1
+         AND r.submission_status = $2
+       GROUP BY c.id, c.code, c.title, c.level,
+                sess.id, sess.name, sem.id, sem.name, u.full_name
+       ORDER BY MIN(r.submitted_at) DESC
+    `, [deptId, status]);
+
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
+/**
+ * GET /api/hod/result-submissions/:courseId
+ * Detail: all student results in one course submission.
+ */
+async function getResultSubmissionDetail(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const courseId = parseInt(req.params.courseId, 10);
+    const { session_id, semester_id } = req.query;
+
+    // Verify course in department
+    const c = await db.query(
+      'SELECT code, title FROM courses WHERE id = $1 AND department_id = $2',
+      [courseId, deptId]
+    );
+    if (!c.rows[0]) throw new AppError('Course not in your department.', 403);
+
+    const r = await db.query(`
+      SELECT r.id, r.ca_score, r.exam_score, r.total_score,
+             r.grade, r.grade_point, r.submission_status,
+             r.submitted_at, r.approved_at,
+             s.matric_no, s.level, u.full_name AS student_name
+        FROM results r
+        JOIN students s ON s.id = r.student_id
+        JOIN users u ON u.id = s.user_id
+       WHERE r.course_id = $1
+         AND r.session_id = $2
+         AND r.semester_id = $3
+       ORDER BY u.full_name
+    `, [courseId, session_id, semester_id]);
+
+    res.json({
+      success: true,
+      data: {
+        course: { id: courseId, code: c.rows[0].code, title: c.rows[0].title },
+        results: r.rows,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/hod/result-submissions/:courseId/approve
+ * Approves all submitted results for a course.
+ */
+async function approveResults(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const courseId = parseInt(req.params.courseId, 10);
+    const { session_id, semester_id } = req.body;
+
+    // Verify course
+    const owns = await db.query(
+      'SELECT 1 FROM courses WHERE id = $1 AND department_id = $2',
+      [courseId, deptId]
+    );
+    if (!owns.rows[0]) throw new AppError('Course not in your department.', 403);
+
+    // Approve
+    const upd = await db.query(`
+      UPDATE results
+         SET submission_status = 'approved',
+             approved_at = NOW(),
+             approved_by = $4
+       WHERE course_id = $1
+         AND session_id = $2
+         AND semester_id = $3
+         AND submission_status = 'submitted'
+       RETURNING id
+    `, [courseId, session_id, semester_id, req.user.id]);
+
+    // Notify the lecturer
+    const lecturer = await db.query(`
+      SELECT l.user_id FROM lecturers l
+       WHERE l.id = (SELECT lecturer_id FROM courses WHERE id = $1)
+    `, [courseId]);
+    const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
+
+    if (lecturer.rows[0] && lecturer.rows[0].user_id) {
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES ($1, 'Results approved', $2, 'system')
+      `, [lecturer.rows[0].user_id, `Your results for ${course.rows[0].code} were approved by the HOD.`]);
+    }
+
+    res.json({ success: true, message: `${upd.rowCount} results approved.` });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/hod/result-submissions/:courseId/return
+ * Returns results to lecturer with a reason.
+ */
+async function returnResults(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const courseId = parseInt(req.params.courseId, 10);
+    const { session_id, semester_id, reason } = req.body;
+
+    if (!reason) throw new AppError('Return reason required.', 400);
+
+    const owns = await db.query(
+      'SELECT 1 FROM courses WHERE id = $1 AND department_id = $2',
+      [courseId, deptId]
+    );
+    if (!owns.rows[0]) throw new AppError('Course not in your department.', 403);
+
+    const upd = await db.query(`
+      UPDATE results
+         SET submission_status = 'returned',
+             return_reason = $4
+       WHERE course_id = $1
+         AND session_id = $2
+         AND semester_id = $3
+         AND submission_status = 'submitted'
+       RETURNING id
+    `, [courseId, session_id, semester_id, reason]);
+
+    // Notify lecturer
+    const lecturer = await db.query(`
+      SELECT l.user_id FROM lecturers l
+       WHERE l.id = (SELECT lecturer_id FROM courses WHERE id = $1)
+    `, [courseId]);
+    const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
+
+    if (lecturer.rows[0] && lecturer.rows[0].user_id) {
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES ($1, 'Results returned for correction', $2, 'system')
+      `, [lecturer.rows[0].user_id, `Your results for ${course.rows[0].code} were returned: ${reason}`]);
+    }
+
+    res.json({ success: true, message: `${upd.rowCount} results returned.` });
+  } catch (err) { next(err); }
+}
+
 /* ==================== EXPORTS ==================== */
 module.exports = {
   getDashboard,
@@ -597,4 +771,8 @@ module.exports = {
   changePassword,
   uploadOwnPhoto,
   removeOwnPhoto,
+  listResultSubmissions,
+  getResultSubmissionDetail,
+  approveResults,
+  returnResults,
 };

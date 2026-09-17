@@ -384,4 +384,23 @@ router.delete('/profile/photo',
   asyncHandler(adminController.removeOwnPhoto)
 );
 
+/* ============================================================
+   PUBLISH RESULTS
+   ============================================================ */
+router.get('/publish/result-submissions', asyncHandler(adminController.listPublishableResults));
+router.post('/publish/:courseId',
+  p('courseId').isInt(),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.publishResults)
+);
+router.post('/unpublish/:courseId',
+  p('courseId').isInt(),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.unpublishResults)
+);
+
 module.exports = router;

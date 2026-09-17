@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Result Submissions — SMARTACADEMIC HOD</title>
+  <link rel="icon" type="image/png" href="/assets/images/fpu-logo.png" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header">
+          <div>
+            <h1>Result Submissions</h1>
+            <p>Review and approve results submitted by lecturers.</p>
+          </div>
+        </div>
+
+        <div class="filters">
+          <select class="select" id="statusFilter" style="max-width:200px;">
+            <option value="submitted" selected>Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="returned">Returned</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Lecturer</th>
+                <th>Session</th>
+                <th>Semester</th>
+                <th>Students</th>
+                <th>Submitted</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/hod/result-submissions.js"></script>
+</body>
+</html>
