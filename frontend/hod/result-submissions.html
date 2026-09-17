@@ -9,24 +9,9 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
-  <style>
-    .cb-cell { width: 44px; text-align: center; }
-    .cb-cell input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
-    .bulk-bar {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 18px;
-      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-      border: 1px solid #bbf7d0;
-      border-radius: 12px;
-      margin-bottom: 16px;
-    }
-    .bulk-bar.active { display: flex; }
-    .bulk-bar .bulk-info { flex: 1; font-size: 14px; color: #166534; font-weight: 600; }
-  </style>
 </head>
 <body>
+
   <div class="app-shell">
     <div id="sidebarSlot"></div>
     <div class="main">
@@ -48,20 +33,10 @@
           </select>
         </div>
 
-        <div class="bulk-bar" id="bulkBar">
-          <div class="bulk-info">
-            <strong id="bulkCount">0</strong> course(s) selected
-          </div>
-          <button class="btn btn-primary btn-sm" id="btnBulkApprove">✓ Approve All</button>
-          <button class="btn btn-danger btn-sm" id="btnBulkReturn">↩ Return Selected</button>
-          <button class="btn btn-ghost btn-sm" id="btnBulkClear">Clear</button>
-        </div>
-
         <div class="table-wrap">
           <table class="table">
             <thead>
               <tr>
-                <th class="cb-cell"><input type="checkbox" id="checkAll" /></th>
                 <th>Course</th>
                 <th>Lecturer</th>
                 <th>Session</th>
@@ -72,7 +47,7 @@
               </tr>
             </thead>
             <tbody id="tbody">
-              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+              <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -80,6 +55,8 @@
       </main>
     </div>
   </div>
+
+  <div id="modalRoot"></div>
 
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
