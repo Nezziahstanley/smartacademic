@@ -1,10 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Publish Results — SMARTACADEMIC Admin</title>
-  <link rel="icon" type="image/png" href="/assets/images/fpu-logo.png" />
   <link rel="stylesheet" href="/css/layout.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
@@ -16,6 +15,7 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
           <div>
             <h1>Publish Results</h1>
@@ -41,6 +41,7 @@
             </tbody>
           </table>
         </div>
+
       </main>
     </div>
   </div>
@@ -52,10 +53,8 @@
     'use strict';
     (function () {
       const token = localStorage.getItem('sa_token');
-      const $ = (s) => document.querySelector(s);
-      const esc = (s) => String(s == null ? '' : s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      function $ (s) { return document.querySelector(s); }
+      function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
       async function api(p, opts = {}) {
         const r = await fetch(p, {
