@@ -41,36 +41,49 @@ async function approve(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
 
-    const user = await db.query('SELECT * FROM users WHERE id = $1 AND is_active = FALSE', [id]);
+    const user = await db.query(
+      'SELECT * FROM users WHERE id = $1 AND is_active = FALSE',
+      [id]
+    );
     if (!user.rows[0]) throw new AppError('Pending user not found.', 404);
 
+    // Approve
     await db.query('UPDATE users SET is_active = TRUE WHERE id = $1', [id]);
 
-    // Welcome email (best-effort, ignore failures)
+    // Send welcome email (best-effort)
     try {
+      const emailService = require('../services/emailService');
       await emailService.send({
         to: user.rows[0].email,
         subject: 'Your SMARTACADEMIC account is now active',
         html: `
           <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">
-            <div style="background:#10b981;padding:24px;border-radius:12px 12px 0 0;color:#fff;text-align:center;">
+            <div style="background:#166534;padding:24px;border-radius:12px 12px 0 0;color:#fff;text-align:center;">
               <h2 style="margin:0;">Account Approved ✅</h2>
             </div>
             <div style="background:#fff;padding:30px;border-radius:0 0 12px 12px;">
               <p>Hi ${user.rows[0].full_name},</p>
-              <p>Your SMARTACADEMIC account has been approved. You can now log in with the email and password you registered with.</p>
+              <p>Your SMARTACADEMIC account has been approved. You can now log in.</p>
               <p style="text-align:center;margin:24px 0;">
-                <a href="${process.env.CLIENT_URL || 'http://localhost:5000'}/login.html"
-                   style="background:#4f46e5;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;">
+                <a href="${process.env.CLIENT_URL}/login.html"
+                   style="background:#166534;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;">
                   Log in
                 </a>
               </p>
             </div>
           </div>`,
       });
-    } catch (e) {
-      console.warn('[approval] Email send failed:', e.message);
-    }
+    } catch (e) { /* silent */ }
+
+    // In-app notification
+    await db.query(`
+      INSERT INTO notifications (user_id, title, message, type)
+      VALUES ($1, 'Account approved', 'Your account has been approved. Welcome to SMARTACADEMIC!', 'system')
+    `, [id]);
+
+    res.json({ success: true, message: 'User approved and notified.' });
+  } catch (err) { next(err); }
+}
 
     // In-app notification
     try {
