@@ -25,7 +25,7 @@
           </div>
         </div>
 
-        <!-- PROFILE PHOTO -->
+        <!-- ============ PROFILE PHOTO ============ -->
         <div class="card mb-4">
           <div class="card-header">
             <div>
@@ -46,18 +46,26 @@
 
             <div style="flex:1;min-width:240px;">
               <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-                <button type="button" class="btn btn-primary" id="btnUploadPhoto">📷 Upload New Photo</button>
-                <button type="button" class="btn btn-ghost" id="btnRemovePhoto" style="display:none;">🗑️ Remove</button>
+                <button type="button" class="btn btn-primary" id="btnUploadPhoto">
+                  📷 Upload New Photo
+                </button>
+                <button type="button" class="btn btn-ghost" id="btnRemovePhoto" style="display:none;">
+                  🗑️ Remove
+                </button>
               </div>
               <p style="font-size:13px;color:var(--ink-3);line-height:1.6;margin:0;">
-                Max 2 MB • JPG or PNG • Square image (400×400 px or larger)
+                <strong>Requirements:</strong><br>
+                • Square image (JPG or PNG)<br>
+                • Max 2 MB<br>
+                • Recommended: 400×400 px or larger
               </p>
             </div>
           </div>
         </div>
+
         <input type="file" id="photoInput" accept="image/*" style="display:none;" />
 
-        <!-- PROFILE + PASSWORD -->
+        <!-- ============ PROFILE + PASSWORD ============ -->
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><div><h3>Profile Information</h3></div></div>
@@ -68,12 +76,18 @@
             <div class="card-header"><div><h3>Change Password</h3><p>Use a strong password.</p></div></div>
             <div class="msg" id="pwMsg"></div>
             <form id="pwForm">
-              <div class="field"><label>Current password *</label>
-                <input class="input" id="pwCurrent" type="password" required /></div>
-              <div class="field"><label>New password *</label>
-                <input class="input" id="pwNew" type="password" required /></div>
-              <div class="field"><label>Confirm new password *</label>
-                <input class="input" id="pwConfirm" type="password" required /></div>
+              <div class="field">
+                <label>Current password *</label>
+                <input class="input" id="pwCurrent" type="password" autocomplete="current-password" required />
+              </div>
+              <div class="field">
+                <label>New password *</label>
+                <input class="input" id="pwNew" type="password" autocomplete="new-password" required />
+              </div>
+              <div class="field">
+                <label>Confirm new password *</label>
+                <input class="input" id="pwConfirm" type="password" autocomplete="new-password" required />
+              </div>
               <button type="submit" class="btn btn-primary w-full" id="pwBtn">Change Password</button>
             </form>
           </div>
