@@ -787,6 +787,73 @@ async function submitResultsToHod(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   BULK SUBMIT — Lecturer submits multiple courses at once
+   Body: { course_ids: [...], session_id, semester_id }
+   ============================================================ */
+async function submitResultsBulk(req, res, next) {
+  try {
+    const { id: lecturerId, department_id } = await getLecturerId(req.user.id);
+    const { course_ids, session_id, semester_id } = req.body;
+
+    if (!Array.isArray(course_ids) || !course_ids.length) {
+      throw new AppError('course_ids array required.', 400);
+    }
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    let totalSubmitted = 0;
+    const submittedCourses = [];
+
+    for (const cid of course_ids) {
+      const courseId = parseInt(cid, 10);
+      try {
+        await assertCourseOwnership(lecturerId, courseId);
+
+        const upd = await db.query(`
+          UPDATE results
+             SET submission_status = 'submitted',
+                 submitted_at = NOW(),
+                 submitted_by = $4
+           WHERE course_id = $1
+             AND session_id = $2
+             AND semester_id = $3
+             AND submission_status IN ('draft', 'returned')
+          RETURNING id
+        `, [courseId, session_id, semester_id, req.user.id]);
+
+        if (upd.rowCount > 0) {
+          totalSubmitted += upd.rowCount;
+          submittedCourses.push({ course_id: courseId, count: upd.rowCount });
+        }
+      } catch (e) {
+        console.warn('[bulk-submit] Skipped course', courseId, e.message);
+      }
+    }
+
+    // Notify HOD once
+    if (totalSubmitted > 0) {
+      const hod = await db.query('SELECT hod_id FROM departments WHERE id = $1', [department_id]);
+      if (hod.rows[0] && hod.rows[0].hod_id) {
+        await db.query(`
+          INSERT INTO notifications (user_id, title, message, type)
+          VALUES ($1, 'Results submitted for review', $2, 'system')
+        `, [
+          hod.rows[0].hod_id,
+          `${req.user.full_name} submitted results for ${submittedCourses.length} course(s) (${totalSubmitted} students).`,
+        ]);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${submittedCourses.length} course(s) submitted, ${totalSubmitted} student results in total.`,
+      data: { submitted: submittedCourses, totalSubmitted },
+    });
+  } catch (err) { next(err); }
+}
+
 /* ==================== EXPORTS ==================== */
 module.exports = {
   getDashboard,
@@ -819,4 +886,5 @@ module.exports = {
   uploadOwnPhoto,
   removeOwnPhoto,
   submitResultsToHod,
+    submitResultsBulk,
 };

@@ -749,6 +749,137 @@ async function returnResults(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   BULK APPROVE — HOD approves multiple courses at once
+   Body: { course_ids: [...], session_id, semester_id }
+   ============================================================ */
+async function approveResultsBulk(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const { course_ids, session_id, semester_id } = req.body;
+
+    if (!Array.isArray(course_ids) || !course_ids.length) {
+      throw new AppError('course_ids array required.', 400);
+    }
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    let totalApproved = 0;
+    const approvedCourses = [];
+
+    for (const cid of course_ids) {
+      const courseId = parseInt(cid, 10);
+
+      const owns = await db.query(
+        'SELECT 1 FROM courses WHERE id = $1 AND department_id = $2',
+        [courseId, deptId]
+      );
+      if (!owns.rows[0]) continue;
+
+      const upd = await db.query(`
+        UPDATE results
+           SET submission_status = 'approved',
+               approved_at = NOW(),
+               approved_by = $4
+         WHERE course_id = $1
+           AND session_id = $2
+           AND semester_id = $3
+           AND submission_status = 'submitted'
+        RETURNING id
+      `, [courseId, session_id, semester_id, req.user.id]);
+
+      if (upd.rowCount > 0) {
+        totalApproved += upd.rowCount;
+        approvedCourses.push({ course_id: courseId, count: upd.rowCount });
+
+        const lecturer = await db.query(`
+          SELECT l.user_id FROM lecturers l
+           WHERE l.id = (SELECT lecturer_id FROM courses WHERE id = $1)
+        `, [courseId]);
+        const course = await db.query('SELECT code FROM courses WHERE id = $1', [courseId]);
+
+        if (lecturer.rows[0] && lecturer.rows[0].user_id) {
+          await db.query(`
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES ($1, 'Results approved', $2, 'system')
+          `, [lecturer.rows[0].user_id, `Your results for ${course.rows[0].code} were approved.`]);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${approvedCourses.length} course(s) approved, ${totalApproved} student results in total.`,
+      data: { approved: approvedCourses, totalApproved },
+    });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
+   BULK RETURN — HOD returns multiple courses at once
+   Body: { course_ids: [...], session_id, semester_id, reason }
+   ============================================================ */
+async function returnResultsBulk(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const { course_ids, session_id, semester_id, reason } = req.body;
+
+    if (!Array.isArray(course_ids) || !course_ids.length) {
+      throw new AppError('course_ids array required.', 400);
+    }
+    if (!reason) throw new AppError('Return reason required.', 400);
+
+    let totalReturned = 0;
+    const returnedCourses = [];
+
+    for (const cid of course_ids) {
+      const courseId = parseInt(cid, 10);
+
+      const owns = await db.query(
+        'SELECT 1 FROM courses WHERE id = $1 AND department_id = $2',
+        [courseId, deptId]
+      );
+      if (!owns.rows[0]) continue;
+
+      const upd = await db.query(`
+        UPDATE results
+           SET submission_status = 'returned',
+               return_reason = $4
+         WHERE course_id = $1
+           AND session_id = $2
+           AND semester_id = $3
+           AND submission_status = 'submitted'
+        RETURNING id
+      `, [courseId, session_id, semester_id, reason]);
+
+      if (upd.rowCount > 0) {
+        totalReturned += upd.rowCount;
+        returnedCourses.push({ course_id: courseId, count: upd.rowCount });
+
+        const lecturer = await db.query(`
+          SELECT l.user_id FROM lecturers l
+           WHERE l.id = (SELECT lecturer_id FROM courses WHERE id = $1)
+        `, [courseId]);
+        const course = await db.query('SELECT code FROM courses WHERE id = $1', [courseId]);
+
+        if (lecturer.rows[0] && lecturer.rows[0].user_id) {
+          await db.query(`
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES ($1, 'Results returned for correction', $2, 'system')
+          `, [lecturer.rows[0].user_id, `Your results for ${course.rows[0].code} were returned: ${reason}`]);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${returnedCourses.length} course(s) returned, ${totalReturned} student results in total.`,
+      data: { returned: returnedCourses, totalReturned },
+    });
+  } catch (err) { next(err); }
+}
+
 /* ==================== EXPORTS ==================== */
 module.exports = {
   getDashboard,
@@ -775,4 +906,6 @@ module.exports = {
   getResultSubmissionDetail,
   approveResults,
   returnResults,
+  approveResultsBulk,
+  returnResultsBulk,
 };

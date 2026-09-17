@@ -642,6 +642,75 @@ async function unpublishResults(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   BULK PUBLISH — Admin publishes multiple courses at once
+   Body: { course_ids: [...], session_id, semester_id }
+   ============================================================ */
+async function publishResultsBulk(req, res, next) {
+  try {
+    const { course_ids, session_id, semester_id } = req.body;
+
+    if (!Array.isArray(course_ids) || !course_ids.length) {
+      throw new AppError('course_ids array required.', 400);
+    }
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    let totalPublished = 0;
+    const publishedCourses = [];
+
+    for (const cid of course_ids) {
+      const courseId = parseInt(cid, 10);
+
+      const upd = await db.query(`
+        UPDATE results
+           SET is_published = TRUE
+         WHERE course_id = $1
+           AND session_id = $2
+           AND semester_id = $3
+           AND submission_status = 'approved'
+           AND is_published = FALSE
+        RETURNING id
+      `, [courseId, session_id, semester_id]);
+
+      if (upd.rowCount > 0) {
+        totalPublished += upd.rowCount;
+        publishedCourses.push({ course_id: courseId, count: upd.rowCount });
+
+        const students = await db.query(`
+          SELECT DISTINCT u.id
+            FROM results r
+            JOIN students s ON s.id = r.student_id
+            JOIN users u ON u.id = s.user_id
+           WHERE r.course_id = $1 AND r.session_id = $2 AND r.semester_id = $3
+        `, [courseId, session_id, semester_id]);
+        const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
+
+        for (const st of students.rows) {
+          await db.query(`
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES ($1, 'Result published', $2, 'result')
+          `, [st.id, `Your result for ${course.rows[0].code} — ${course.rows[0].title} is now available.`]);
+        }
+      }
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'publish_results_bulk',
+      module: 'results',
+      details: { courses: publishedCourses.length, students: totalPublished },
+    });
+
+    res.json({
+      success: true,
+      message: `${publishedCourses.length} course(s) published, ${totalPublished} student results in total.`,
+      data: { published: publishedCourses, totalPublished },
+    });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   uploadOwnPhoto,
   removeOwnPhoto,
@@ -665,4 +734,5 @@ module.exports = {
   listPublishableResults,
   publishResults,
   unpublishResults,
+  publishResultsBulk,
 };
