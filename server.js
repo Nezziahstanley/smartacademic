@@ -114,6 +114,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('  SMARTACADEMIC API');
   console.log('═══════════════════════════════════════════════');
   console.log(`  Environment : ${env.NODE_ENV}`);
+  console.log(`  process.env.PORT = ${process.env.PORT || '(not set)'}`);
+  console.log(`  Using PORT       = ${PORT}`);
   console.log(`  URL         : http://localhost:${PORT}`);
   console.log(`  Health      : http://localhost:${PORT}/api/health`);
   console.log(`  Frontend    : http://localhost:${PORT}/`);

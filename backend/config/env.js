@@ -46,8 +46,8 @@ function int(name, fallback) {
 const env = {
   // ---------- App ----------
   NODE_ENV: optional('NODE_ENV', 'development'),
-  PORT: int('PORT', 5000),
-  CLIENT_URL: optional('CLIENT_URL', 'http://localhost:5000'),
+  PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 5000,
+  CLIENT_URL: optional('CLIENT_URL', 'https://smartacademic-1.onrender.com'),
 
   // ---------- Database ----------
   DB: {
