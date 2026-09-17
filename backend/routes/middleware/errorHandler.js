@@ -1,6 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Global Error Handler
 // Converts thrown errors into consistent JSON responses.
+// In production, stack traces are hidden.
 // ============================================================
 
 'use strict';
@@ -23,6 +24,7 @@ class AppError extends Error {
 
 /**
  * Wrap async route handlers so thrown errors reach Express.
+ * Usage: router.get('/', asyncHandler(async (req, res) => { ... }));
  */
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -40,23 +42,30 @@ function notFoundHandler(req, res, next) {
  */
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
+  // Default values
   let statusCode = err.statusCode || 500;
   let message    = err.message || 'Internal Server Error';
   let details    = err.details || null;
 
-  // PostgreSQL errors
+  // Handle PostgreSQL unique violation
   if (err.code === '23505') {
     statusCode = 409;
     message = 'A record with that value already exists';
     details = err.detail;
-  } else if (err.code === '23503') {
+  }
+  // Foreign key violation
+  else if (err.code === '23503') {
     statusCode = 400;
     message = 'Related record not found';
     details = err.detail;
-  } else if (err.code === '23502') {
+  }
+  // Not null violation
+  else if (err.code === '23502') {
     statusCode = 400;
     message = `Missing required field: ${err.column}`;
-  } else if (err.code === '22P02') {
+  }
+  // Invalid input syntax (bad cast)
+  else if (err.code === '22P02') {
     statusCode = 400;
     message = 'Invalid input format';
   }
@@ -74,7 +83,10 @@ function errorHandler(err, req, res, next) {
     console.error('[error]', statusCode, message);
   }
 
-  const body = { success: false, error: message };
+  const body = {
+    success: false,
+    error: message,
+  };
   if (details) body.details = details;
   if (env.isDevelopment && err.stack) body.stack = err.stack.split('\n');
 

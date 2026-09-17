@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>At-Risk Students — Lecturer</title>
+  <title>At-Risk Students — SMARTACADEMIC Lecturer</title>
+  <link rel="icon" type="image/png" href="/assets/images/fpu-logo.png" />
   <link rel="stylesheet" href="/css/layout.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
@@ -15,18 +16,44 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
-        <div class="page-header"><div><h1>At-Risk Students</h1><p>Students needing attention in your courses.</p></div></div>
+        <div class="page-header">
+          <div>
+            <h1>At-Risk Students</h1>
+            <p>Intervene directly or report to your HOD.</p>
+          </div>
+        </div>
+
+        <div class="msg msg-info show" style="margin-bottom:18px;line-height:1.6;">
+          <strong>ℹ️ What to do:</strong><br>
+          • <strong>🟡 YELLOW / 🟠 ORANGE</strong> — click <strong>📝 Intervene</strong> to create a direct action.<br>
+          • <strong>🔴 RED</strong> — click <strong>⬆️ Report to HOD</strong> for a formal intervention.
+        </div>
+
         <div class="table-wrap">
           <table class="table">
-            <thead><tr>
-              <th>Student</th><th>Matric</th><th>Course</th><th>Risk</th><th>Score</th><th>Attend%</th><th>GPA</th>
-            </tr></thead>
-            <tbody id="tbody"><tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Matric</th>
+                <th>Course</th>
+                <th>Risk</th>
+                <th>Score</th>
+                <th>Attend%</th>
+                <th>GPA</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
           </table>
         </div>
       </main>
     </div>
   </div>
+
+  <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
