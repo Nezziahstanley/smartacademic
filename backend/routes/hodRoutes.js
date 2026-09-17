@@ -110,7 +110,7 @@ router.put('/interventions/:id',
 );
 
 /* ============================================================
-   SUBMISSIONS — HOD proposes new students/lecturers/courses
+   SUBMISSIONS
    ============================================================ */
 router.post('/submissions',
   body('type').isIn(['student', 'lecturer', 'course']),

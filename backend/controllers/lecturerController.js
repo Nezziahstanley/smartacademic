@@ -1,6 +1,6 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Lecturer Controller
-// Everything is scoped to courses taught by the logged-in lecturer.
+// All data scoped to courses taught by the logged-in lecturer.
 // ============================================================
 
 'use strict';
@@ -89,16 +89,13 @@ async function listMyCourses(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ==================== STUDENTS IN MY COURSES ==================== */
+/* ==================== STUDENTS ==================== */
 async function listStudents(req, res, next) {
   try {
     const { id: lecturerId } = await getLecturerId(req.user.id);
     const { course_id, search } = req.query;
     const params = [lecturerId]; const where = [];
-    if (course_id) {
-      params.push(parseInt(course_id, 10));
-      where.push(`c.id = $${params.length}`);
-    }
+    if (course_id) { params.push(parseInt(course_id, 10)); where.push(`c.id = $${params.length}`); }
     if (search) {
       params.push(`%${search.toLowerCase()}%`);
       where.push(`(LOWER(u.full_name) LIKE $${params.length} OR LOWER(s.matric_no) LIKE $${params.length})`);
@@ -160,7 +157,6 @@ async function getAttendance(req, res, next) {
     const { id: lecturerId } = await getLecturerId(req.user.id);
     const classSessionId = parseInt(req.params.classSessionId, 10);
 
-    // Verify the session belongs to a course the lecturer teaches
     const owns = await db.query(`
       SELECT cs.id, c.id AS course_id, c.code, c.title
         FROM class_sessions cs
@@ -182,10 +178,7 @@ async function getAttendance(req, res, next) {
 
     res.json({
       success: true,
-      data: {
-        session: owns.rows[0],
-        students: students.rows,
-      },
+      data: { session: owns.rows[0], students: students.rows },
     });
   } catch (err) { next(err); }
 }
@@ -194,7 +187,7 @@ async function saveAttendance(req, res, next) {
   try {
     const { id: lecturerId } = await getLecturerId(req.user.id);
     const classSessionId = parseInt(req.params.classSessionId, 10);
-    const { records } = req.body; // [{ student_id, status, remarks }]
+    const { records } = req.body;
 
     const owns = await db.query(`
       SELECT cs.id FROM class_sessions cs
@@ -311,8 +304,7 @@ async function getScores(req, res, next) {
     if (!owns.rows[0]) throw new AppError('Not found.', 404);
 
     const students = await db.query(`
-      SELECT s.id, s.matric_no, u.full_name,
-             sc.score, sc.id AS score_id
+      SELECT s.id, s.matric_no, u.full_name, sc.score, sc.id AS score_id
         FROM course_registrations cr
         JOIN students s ON s.id = cr.student_id
         JOIN users u ON u.id = s.user_id
@@ -352,9 +344,7 @@ async function saveScores(req, res, next) {
           INSERT INTO scores (assessment_id, student_id, score, entered_by)
           VALUES ($1, $2, $3, $4)
           ON CONFLICT (assessment_id, student_id) DO UPDATE
-             SET score = EXCLUDED.score,
-                 entered_by = EXCLUDED.entered_by,
-                 updated_at = NOW()
+             SET score = EXCLUDED.score, entered_by = EXCLUDED.entered_by, updated_at = NOW()
         `, [id, sc.student_id, val, req.user.id]);
       }
       await client.query('COMMIT');
@@ -412,6 +402,124 @@ async function listAtRisk(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function getStudentDetail(req, res, next) {
+  try {
+    const { id: lecturerId } = await getLecturerId(req.user.id);
+    const studentId = parseInt(req.params.id, 10);
+
+    const belongs = await db.query(`
+      SELECT 1 FROM course_registrations cr
+        JOIN courses c ON c.id = cr.course_id
+       WHERE cr.student_id = $1 AND c.lecturer_id = $2 LIMIT 1
+    `, [studentId, lecturerId]);
+    if (!belongs.rows[0]) throw new AppError('Student not in your courses.', 403);
+
+    const [student, attendance, risk, results] = await Promise.all([
+      db.query(`SELECT s.id, s.matric_no, s.level, u.full_name, u.email
+                  FROM students s JOIN users u ON u.id = s.user_id WHERE s.id = $1`, [studentId]),
+      db.query(`
+        SELECT COUNT(*)::int AS total,
+               SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)::int AS present,
+               ROUND((SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(*),0)) * 100, 2) AS pct
+          FROM attendance WHERE student_id = $1
+      `, [studentId]),
+      db.query(`SELECT * FROM risk_assessments WHERE student_id = $1 ORDER BY assessed_at DESC LIMIT 1`, [studentId]),
+      db.query(`SELECT r.total_score, r.grade, c.code, c.title
+                  FROM results r JOIN courses c ON c.id = r.course_id
+                 WHERE r.student_id = $1 ORDER BY r.computed_at DESC LIMIT 10`, [studentId]),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        student: student.rows[0],
+        attendance: attendance.rows[0],
+        risk: risk.rows[0] || null,
+        results: results.rows,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+/* ==================== AT-RISK: Intervene ==================== */
+async function interveneAtRisk(req, res, next) {
+  try {
+    const { id: lecturerId } = await getLecturerId(req.user.id);
+    const studentId = parseInt(req.params.studentId, 10);
+
+    const belongs = await db.query(`
+      SELECT 1 FROM course_registrations cr
+        JOIN courses c ON c.id = cr.course_id
+       WHERE cr.student_id = $1 AND c.lecturer_id = $2 LIMIT 1
+    `, [studentId, lecturerId]);
+    if (!belongs.rows[0]) throw new AppError('Student not in your courses.', 403);
+
+    const { type = 'lecturer_meeting', title, description, priority = 'medium' } = req.body;
+    if (!title) throw new AppError('Title required.', 400);
+
+    const r = await db.query(`
+      INSERT INTO interventions
+        (student_id, type, title, description, assigned_to, priority, status, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7)
+      RETURNING id
+    `, [studentId, type, title, description || null, req.user.id, priority, req.user.id]);
+
+    const st = await db.query('SELECT user_id FROM students WHERE id = $1', [studentId]);
+    if (st.rows[0]) {
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type, related_id)
+        VALUES ($1, 'New intervention', $2, 'intervention', $3)
+      `, [st.rows[0].user_id, `Your lecturer created: ${title}`, r.rows[0].id]);
+    }
+
+    res.status(201).json({ success: true, data: r.rows[0] });
+  } catch (err) { next(err); }
+}
+
+/* ==================== AT-RISK: Report to HOD ==================== */
+async function reportToHod(req, res, next) {
+  try {
+    const { id: lecturerId, department_id } = await getLecturerId(req.user.id);
+    const studentId = parseInt(req.params.studentId, 10);
+
+    const belongs = await db.query(`
+      SELECT 1 FROM course_registrations cr
+        JOIN courses c ON c.id = cr.course_id
+       WHERE cr.student_id = $1 AND c.lecturer_id = $2 LIMIT 1
+    `, [studentId, lecturerId]);
+    if (!belongs.rows[0]) throw new AppError('Student not in your courses.', 403);
+
+    const { message } = req.body;
+
+    const hod = await db.query('SELECT hod_id FROM departments WHERE id = $1', [department_id]);
+    if (!hod.rows[0] || !hod.rows[0].hod_id) {
+      throw new AppError('No HOD assigned to your department.', 400);
+    }
+
+    const stu = await db.query(`
+      SELECT u.full_name, s.matric_no
+        FROM students s JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1
+    `, [studentId]);
+
+    await db.query(`
+      INSERT INTO notifications (user_id, title, message, type, related_id)
+      VALUES ($1, 'At-risk student flagged', $2, 'risk_alert', $3)
+    `, [
+      hod.rows[0].hod_id,
+      `${req.user.full_name} flagged ${stu.rows[0].full_name} (${stu.rows[0].matric_no}) — please review. ${message || ''}`.trim(),
+      studentId,
+    ]);
+
+    await db.query(`
+      INSERT INTO audit_logs (user_id, action, module, affected_record, details)
+      VALUES ($1, 'report_to_hod', 'risk', $2, $3)
+    `, [req.user.id, `student:${studentId}`, JSON.stringify({ message })]);
+
+    res.json({ success: true, message: 'Reported to HOD.' });
+  } catch (err) { next(err); }
+}
+
 /* ==================== INTERVENTIONS ==================== */
 async function listInterventions(req, res, next) {
   try {
@@ -446,45 +554,7 @@ async function updateIntervention(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ==================== UPDATE OWN PROFILE ==================== */
-async function updateOwnProfile(req, res, next) {
-  try {
-    const { full_name, phone } = req.body;
-    await db.query(`
-      UPDATE users
-         SET full_name = COALESCE($2, full_name),
-             phone     = COALESCE($3, phone)
-       WHERE id = $1
-    `, [req.user.id, full_name || null, phone || null]);
-    res.json({ success: true, message: 'Profile updated.' });
-  } catch (err) { next(err); }
-}
-
-/* ==================== CHANGE OWN PASSWORD ==================== */
-async function changePassword(req, res, next) {
-  try {
-    const { current_password, new_password } = req.body;
-    const bcrypt = require('bcryptjs');
-    const env = require('../config/env');
-
-    if (!new_password || new_password.length < 6) {
-      throw new AppError('New password must be at least 6 characters.', 400);
-    }
-
-    const r = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-    if (!r.rows[0]) throw new AppError('User not found.', 404);
-
-    const ok = await bcrypt.compare(current_password, r.rows[0].password_hash);
-    if (!ok) throw new AppError('Current password is incorrect.', 400);
-
-    const hash = await bcrypt.hash(new_password, env.BCRYPT_ROUNDS);
-    await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, hash]);
-
-    res.json({ success: true, message: 'Password changed.' });
-  } catch (err) { next(err); }
-}
-
-/* ==================== REPORTS ==================== */
+/* ==================== REPORT HELPERS ==================== */
 async function coursePerformanceReport(req, res, next) {
   try {
     const { id: lecturerId } = await getLecturerId(req.user.id);
@@ -541,14 +611,35 @@ async function gradeDistributionReport(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ==================== BROADCAST TO MY STUDENTS ==================== */
+async function studentAveragesReport(req, res, next) {
+  try {
+    const { id: lecturerId } = await getLecturerId(req.user.id);
+    const { course_id } = req.query;
+    const params = [lecturerId];
+    let extra = '';
+    if (course_id) { params.push(parseInt(course_id, 10)); extra = ` AND c.id = $${params.length}`; }
+
+    const r = await db.query(`
+      SELECT u.full_name, s.matric_no, c.code, r.total_score, r.grade
+        FROM results r
+        JOIN courses c ON c.id = r.course_id
+        JOIN students s ON s.id = r.student_id
+        JOIN users u ON u.id = s.user_id
+       WHERE c.lecturer_id = $1${extra}
+       ORDER BY c.code, u.full_name
+       LIMIT 500
+    `, params);
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
+/* ==================== BROADCAST ==================== */
 async function broadcastToStudents(req, res, next) {
   try {
     const { id: lecturerId } = await getLecturerId(req.user.id);
     const { title, message } = req.body;
     if (!title || !message) throw new AppError('Title and message required.', 400);
 
-    // Get all students registered in courses taught by this lecturer
     const students = await db.query(`
       SELECT DISTINCT u.id
         FROM users u
@@ -575,89 +666,95 @@ async function broadcastToStudents(req, res, next) {
   } catch (err) { next(err); }
 }
 
-async function studentAveragesReport(req, res, next) {
+/* ==================== PROFILE ==================== */
+async function updateOwnProfile(req, res, next) {
   try {
-    const { id: lecturerId } = await getLecturerId(req.user.id);
-    const { course_id } = req.query;
-    const params = [lecturerId];
-    let extra = '';
-    if (course_id) { params.push(parseInt(course_id, 10)); extra = ` AND c.id = $${params.length}`; }
-
-    const r = await db.query(`
-      SELECT u.full_name, s.matric_no, c.code,
-             r.total_score, r.grade
-        FROM results r
-        JOIN courses c ON c.id = r.course_id
-        JOIN students s ON s.id = r.student_id
-        JOIN users u ON u.id = s.user_id
-       WHERE c.lecturer_id = $1${extra}
-       ORDER BY c.code, u.full_name
-       LIMIT 500
-    `, params);
-    res.json({ success: true, data: r.rows });
+    const { full_name, phone } = req.body;
+    await db.query(`
+      UPDATE users SET full_name = COALESCE($2, full_name), phone = COALESCE($3, phone)
+       WHERE id = $1
+    `, [req.user.id, full_name || null, phone || null]);
+    res.json({ success: true, message: 'Profile updated.' });
   } catch (err) { next(err); }
 }
 
-async function getStudentDetail(req, res, next) {
+async function changePassword(req, res, next) {
   try {
-    const { id: lecturerId } = await getLecturerId(req.user.id);
-    const studentId = parseInt(req.params.id, 10);
+    const { current_password, new_password } = req.body;
+    const bcrypt = require('bcryptjs');
+    const env = require('../config/env');
 
-    // Confirm student is in one of lecturer's courses
-    const belongs = await db.query(`
-      SELECT 1 FROM course_registrations cr
-        JOIN courses c ON c.id = cr.course_id
-       WHERE cr.student_id = $1 AND c.lecturer_id = $2
-       LIMIT 1
-    `, [studentId, lecturerId]);
-    if (!belongs.rows[0]) throw new AppError('Student not in your courses.', 403);
+    if (!new_password || new_password.length < 6) {
+      throw new AppError('New password must be at least 6 characters.', 400);
+    }
 
-    const [student, attendance, risk, results] = await Promise.all([
-      db.query(`
-        SELECT s.id, s.matric_no, s.level, u.full_name, u.email
-          FROM students s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1
-      `, [studentId]),
-      db.query(`
-        SELECT COUNT(*)::int AS total,
-               SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)::int AS present,
-               ROUND((SUM(CASE WHEN status='present' THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(*),0)) * 100, 2) AS pct
-          FROM attendance WHERE student_id = $1
-      `, [studentId]),
-      db.query(`
-        SELECT * FROM risk_assessments WHERE student_id = $1 ORDER BY assessed_at DESC LIMIT 1
-      `, [studentId]),
-      db.query(`
-        SELECT r.total_score, r.grade, c.code, c.title
-          FROM results r JOIN courses c ON c.id = r.course_id
-         WHERE r.student_id = $1
-         ORDER BY r.computed_at DESC LIMIT 10
-      `, [studentId]),
-    ]);
+    const r = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!r.rows[0]) throw new AppError('User not found.', 404);
 
-    res.json({
-      success: true,
-      data: {
-        student: student.rows[0],
-        attendance: attendance.rows[0],
-        risk: risk.rows[0] || null,
-        results: results.rows,
-      },
-    });
+    const ok = await bcrypt.compare(current_password, r.rows[0].password_hash);
+    if (!ok) throw new AppError('Current password is incorrect.', 400);
+
+    const hash = await bcrypt.hash(new_password, env.BCRYPT_ROUNDS);
+    await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, hash]);
+
+    res.json({ success: true, message: 'Password changed.' });
   } catch (err) { next(err); }
 }
 
+async function uploadOwnPhoto(req, res, next) {
+  try {
+    const { photo } = req.body;
+    if (!photo || !photo.startsWith('data:image/')) {
+      throw new AppError('Invalid image.', 400);
+    }
+    if (photo.length > 8_000_000) {
+      throw new AppError('Image too large (max ~2 MB).', 400);
+    }
+    await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+    await db.query(
+      'UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2',
+      [photo, req.user.id]
+    );
+    res.json({ success: true, message: 'Photo updated.' });
+  } catch (err) { next(err); }
+}
+
+async function removeOwnPhoto(req, res, next) {
+  try {
+    await db.query('UPDATE users SET photo_url = NULL, updated_at = NOW() WHERE id = $1', [req.user.id]);
+    res.json({ success: true, message: 'Photo removed.' });
+  } catch (err) { next(err); }
+}
+
+/* ==================== EXPORTS ==================== */
 module.exports = {
-  getDashboard, listMyCourses, listStudents,
-  studentAveragesReport,
+  getDashboard,
+  listMyCourses,
+  listStudents,
+  listClassSessions,
+  createClassSession,
+  getAttendance,
+  saveAttendance,
+  attendanceSummary,
+  listAssessments,
+  createAssessment,
+  deleteAssessment,
+  getScores,
+  saveScores,
+  listResults,
+  listAtRisk,
   getStudentDetail,
+  interveneAtRisk,
+  reportToHod,
+  listInterventions,
+  updateIntervention,
+  coursePerformanceReport,
+  attendanceReport,
+  gradeDistributionReport,
+  studentAveragesReport,
   broadcastToStudents,
-  listClassSessions, createClassSession,
-  getAttendance, saveAttendance, attendanceSummary,
-  listAssessments, createAssessment, deleteAssessment,
-  getScores, saveScores,
-  coursePerformanceReport, attendanceReport, gradeDistributionReport,
-  updateOwnProfile, changePassword,
-  listResults, listAtRisk,
-  listInterventions, updateIntervention,
+  updateOwnProfile,
+  changePassword,
+  uploadOwnPhoto,
+  removeOwnPhoto,
 };
