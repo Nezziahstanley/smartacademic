@@ -1,5 +1,5 @@
 ﻿// ============================================================
-// HOD Result Submissions — review, approve, return
+// HOD Result Submissions — bulk approve / return
 // ============================================================
 
 'use strict';
@@ -47,61 +47,94 @@
     }, 2400);
   }
 
-  const state = { status: 'submitted', items: [] };
+  const state = {
+    status: 'submitted',
+    items: [],
+    selected: new Set(),
+  };
 
   async function load() {
     const tbody = $('#tbody');
-    tbody.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>';
+    state.selected.clear();
+    updateBulkBar();
 
     const { ok, data } = await api('/api/hod/result-submissions?status=' + state.status);
     if (!ok) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
       return;
     }
 
     state.items = data.data || [];
 
     if (!state.items.length) {
-      tbody.innerHTML = `
-        <tr><td colspan="7">
-          <div class="empty" style="padding:40px;">
-            <div class="empty-icon">📊</div>
-            <h3>No ${state.status} submissions</h3>
-          </div>
-        </td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty" style="padding:40px;"><div class="empty-icon">📊</div><h3>No ${state.status} submissions</h3></div></td></tr>`;
       return;
     }
 
-    tbody.innerHTML = state.items.map(s => `
-      <tr>
-        <td><strong>${esc(s.code)}</strong> — ${esc(s.title)}<div style="font-size:12px;color:var(--ink-3);">Level ${s.level}</div></td>
-        <td>${esc(s.lecturer_name || '—')}</td>
-        <td>${esc(s.session_name)}</td>
-        <td>${esc(s.semester_name)}</td>
-        <td>${s.students}</td>
-        <td>${s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '—'}</td>
-        <td>
-          <div class="actions">
-            <button class="btn btn-ghost btn-sm" data-view="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}">View</button>
-            ${state.status === 'submitted' ? `
-              <button class="btn btn-primary btn-sm" data-approve="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}">✓ Approve</button>
-              <button class="btn btn-danger btn-sm" data-return="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}">↩ Return</button>
-            ` : ''}
-          </div>
-        </td>
-      </tr>`).join('');
+    const showCheckbox = state.status === 'submitted';
 
-    tbody.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => viewDetails(b.dataset)));
-    tbody.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => doApprove(b.dataset)));
-    tbody.querySelectorAll('[data-return]').forEach(b => b.addEventListener('click', () => doReturn(b.dataset)));
+    tbody.innerHTML = state.items.map(s => {
+      const checked = state.selected.has(s.course_id) ? 'checked' : '';
+      return `
+        <tr>
+          <td class="cb-cell">
+            ${showCheckbox ? `<input type="checkbox" data-select="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}" ${checked} />` : ''}
+          </td>
+          <td><strong>${esc(s.code)}</strong> — ${esc(s.title)}<div style="font-size:12px;color:var(--ink-3);">Level ${s.level}</div></td>
+          <td>${esc(s.lecturer_name || '—')}</td>
+          <td>${esc(s.session_name)}</td>
+          <td>${esc(s.semester_name)}</td>
+          <td>${s.students}</td>
+          <td>${s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '—'}</td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-ghost btn-sm" data-view="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}">View</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-select]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = parseInt(cb.dataset.select, 10);
+        if (cb.checked) state.selected.add(id);
+        else state.selected.delete(id);
+        updateBulkBar();
+        updateCheckAll();
+      });
+    });
+
+    tbody.querySelectorAll('[data-view]').forEach(b =>
+      b.addEventListener('click', () => viewDetails(b.dataset)));
+
+    updateCheckAll();
+  }
+
+  function updateBulkBar() {
+    const bar = $('#bulkBar');
+    const count = state.selected.size;
+    $('#bulkCount').textContent = count;
+    bar.classList.toggle('active', count > 0 && state.status === 'submitted');
+  }
+
+  function updateCheckAll() {
+    const checkAll = $('#checkAll');
+    if (state.status !== 'submitted') { checkAll.style.display = 'none'; return; }
+    checkAll.style.display = '';
+
+    const ids = state.items.map(i => i.course_id);
+    const all = ids.length > 0 && ids.every(id => state.selected.has(id));
+    const any = ids.some(id => state.selected.has(id));
+    checkAll.checked = all;
+    checkAll.indeterminate = !all && any;
   }
 
   async function viewDetails(ds) {
     const { ok, data } = await api(`/api/hod/result-submissions/${ds.view}?session_id=${ds.session}&semester_id=${ds.semester}`);
-    if (!ok) { alert('Failed to load details'); return; }
+    if (!ok) { alert('Failed to load'); return; }
 
     const { course, results } = data.data;
-
     const html = `
       <div class="table-wrap" style="box-shadow:none;max-height:500px;overflow-y:auto;">
         <table class="table">
@@ -138,36 +171,89 @@
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   }
 
-  async function doApprove(ds) {
-    if (!confirm('Approve these results? Students will see them once admin publishes.')) return;
-    const { ok, data } = await api(`/api/hod/result-submissions/${ds.approve}/approve`, {
-      method: 'POST',
-      body: JSON.stringify({ session_id: parseInt(ds.session, 10), semester_id: parseInt(ds.semester, 10) }),
-    });
-    if (!ok) { alert(data?.error || 'Failed'); return; }
-    toast(data.message || 'Results approved');
-    load();
+  async function bulkApprove() {
+    const ids = Array.from(state.selected);
+    if (!ids.length) { toast('Nothing selected'); return; }
+    if (!confirm(`Approve ${ids.length} course(s)?`)) return;
+
+    const first = state.items.find(i => i.course_id === ids[0]);
+    const btn = $('#btnBulkApprove');
+    btn.disabled = true;
+    btn.textContent = '⏳ Approving...';
+
+    try {
+      const { ok, data } = await api('/api/hod/result-submissions/approve-bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          course_ids: ids,
+          session_id: first.session_id,
+          semester_id: first.semester_id,
+        }),
+      });
+      if (!ok) { alert(data?.error || 'Failed'); return; }
+      toast(data.message || `Approved ${ids.length} course(s)`);
+      load();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✓ Approve All';
+    }
   }
 
-  async function doReturn(ds) {
+  async function bulkReturn() {
+    const ids = Array.from(state.selected);
+    if (!ids.length) { toast('Nothing selected'); return; }
+
     const reason = prompt('Reason for returning (required):');
     if (!reason) return;
-    const { ok, data } = await api(`/api/hod/result-submissions/${ds.return}/return`, {
-      method: 'POST',
-      body: JSON.stringify({
-        session_id: parseInt(ds.session, 10),
-        semester_id: parseInt(ds.semester, 10),
-        reason,
-      }),
-    });
-    if (!ok) { alert(data?.error || 'Failed'); return; }
-    toast('Results returned to lecturer');
-    load();
+
+    const first = state.items.find(i => i.course_id === ids[0]);
+    const btn = $('#btnBulkReturn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Returning...';
+
+    try {
+      const { ok, data } = await api('/api/hod/result-submissions/return-bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          course_ids: ids,
+          session_id: first.session_id,
+          semester_id: first.semester_id,
+          reason,
+        }),
+      });
+      if (!ok) { alert(data?.error || 'Failed'); return; }
+      toast(data.message || `Returned ${ids.length} course(s)`);
+      load();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '↩ Return Selected';
+    }
   }
 
   function bind() {
-    const sel = $('#statusFilter');
-    if (sel) sel.addEventListener('change', e => { state.status = e.target.value; load(); });
+    $('#statusFilter').addEventListener('change', e => {
+      state.status = e.target.value;
+      load();
+    });
+
+    $('#checkAll').addEventListener('change', (e) => {
+      if (e.target.checked) state.items.forEach(i => state.selected.add(i.course_id));
+      else state.selected.clear();
+
+      document.querySelectorAll('[data-select]').forEach(cb => {
+        cb.checked = state.selected.has(parseInt(cb.dataset.select, 10));
+      });
+      updateBulkBar();
+    });
+
+    $('#btnBulkApprove').addEventListener('click', bulkApprove);
+    $('#btnBulkReturn').addEventListener('click', bulkReturn);
+    $('#btnBulkClear').addEventListener('click', () => {
+      state.selected.clear();
+      document.querySelectorAll('[data-select]').forEach(cb => cb.checked = false);
+      updateBulkBar();
+      updateCheckAll();
+    });
   }
 
   function boot() {

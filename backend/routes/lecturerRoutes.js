@@ -165,4 +165,12 @@ router.post('/results/submit/:courseId',
   asyncHandler(ctrl.submitResultsToHod)
 );
 
+
+router.post('/results/submit-bulk',
+  body('course_ids').isArray({ min: 1 }),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  validate,
+  asyncHandler(ctrl.submitResultsBulk)
+);
 module.exports = router;

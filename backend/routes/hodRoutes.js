@@ -151,4 +151,21 @@ router.post('/result-submissions/:courseId/return',
   asyncHandler(ctrl.returnResults)
 );
 
+
+router.post('/result-submissions/approve-bulk',
+  body('course_ids').isArray({ min: 1 }),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  validate,
+  asyncHandler(ctrl.approveResultsBulk)
+);
+
+router.post('/result-submissions/return-bulk',
+  body('course_ids').isArray({ min: 1 }),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  body('reason').trim().notEmpty(),
+  validate,
+  asyncHandler(ctrl.returnResultsBulk)
+);
 module.exports = router;

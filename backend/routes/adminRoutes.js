@@ -403,4 +403,12 @@ router.post('/unpublish/:courseId',
   asyncHandler(adminController.unpublishResults)
 );
 
+
+router.post('/publish-bulk',
+  b('course_ids').isArray({ min: 1 }),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.publishResultsBulk)
+);
 module.exports = router;
