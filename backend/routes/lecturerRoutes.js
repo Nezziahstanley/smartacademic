@@ -154,4 +154,15 @@ router.post('/change-password', asyncHandler(ctrl.changePassword));
 router.post('/profile/photo', asyncHandler(ctrl.uploadOwnPhoto));
 router.delete('/profile/photo', asyncHandler(ctrl.removeOwnPhoto));
 
+/* ============================================================
+   RESULT SUBMISSION
+   ============================================================ */
+router.post('/results/submit/:courseId',
+  param('courseId').isInt(),
+  body('session_id').isInt(),
+  body('semester_id').isInt(),
+  validate,
+  asyncHandler(ctrl.submitResultsToHod)
+);
+
 module.exports = router;

@@ -725,6 +725,67 @@ async function removeOwnPhoto(req, res, next) {
     res.json({ success: true, message: 'Photo removed.' });
   } catch (err) { next(err); }
 }
+/* ============================================================
+   RESULT SUBMISSION
+   Lecturer submits results for their course to the HOD.
+   ============================================================ */
+async function submitResultsToHod(req, res, next) {
+  try {
+    const { id: lecturerId, department_id } = await getLecturerId(req.user.id);
+    const courseId = parseInt(req.params.courseId, 10);
+
+    await assertCourseOwnership(lecturerId, courseId);
+
+    const { session_id, semester_id } = req.body;
+
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    // Get all results for this course + session + semester
+    const results = await db.query(`
+      SELECT r.id, r.student_id
+        FROM results r
+       WHERE r.course_id = $1
+         AND r.session_id = $2
+         AND r.semester_id = $3
+    `, [courseId, session_id, semester_id]);
+
+    if (!results.rows.length) {
+      throw new AppError('No results found to submit. Enter scores first.', 400);
+    }
+
+    // Mark as submitted
+    await db.query(`
+      UPDATE results
+         SET submission_status = 'submitted',
+             submitted_at = NOW(),
+             submitted_by = $4
+       WHERE course_id = $1
+         AND session_id = $2
+         AND semester_id = $3
+         AND submission_status IN ('draft', 'returned')
+    `, [courseId, session_id, semester_Id, req.user.id]);
+
+    // Notify HOD
+    const hod = await db.query('SELECT hod_id FROM departments WHERE id = $1', [department_id]);
+    if (hod.rows[0] && hod.rows[0].hod_id) {
+      const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES ($1, 'Results submitted for review', $2, 'system')
+      `, [
+        hod.rows[0].hod_id,
+        `${req.user.full_name} submitted results for ${course.rows[0].code} — ${course.rows[0].title} for approval.`,
+      ]);
+    }
+
+    res.json({
+      success: true,
+      message: `Results submitted to HOD (${results.rows.length} student records).`,
+    });
+  } catch (err) { next(err); }
+}
 
 /* ==================== EXPORTS ==================== */
 module.exports = {
@@ -757,4 +818,5 @@ module.exports = {
   changePassword,
   uploadOwnPhoto,
   removeOwnPhoto,
+  submitResultsToHod,
 };
