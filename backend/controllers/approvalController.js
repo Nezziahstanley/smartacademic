@@ -47,12 +47,10 @@ async function approve(req, res, next) {
     );
     if (!user.rows[0]) throw new AppError('Pending user not found.', 404);
 
-    // Approve
     await db.query('UPDATE users SET is_active = TRUE WHERE id = $1', [id]);
 
-    // Send welcome email (best-effort)
+    // Welcome email — best effort, ignore failures
     try {
-      const emailService = require('../services/emailService');
       await emailService.send({
         to: user.rows[0].email,
         subject: 'Your SMARTACADEMIC account is now active',
@@ -65,7 +63,7 @@ async function approve(req, res, next) {
               <p>Hi ${user.rows[0].full_name},</p>
               <p>Your SMARTACADEMIC account has been approved. You can now log in.</p>
               <p style="text-align:center;margin:24px 0;">
-                <a href="${process.env.CLIENT_URL}/login.html"
+                <a href="${process.env.CLIENT_URL || 'http://localhost:5000'}/login.html"
                    style="background:#166534;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;">
                   Log in
                 </a>
@@ -73,17 +71,9 @@ async function approve(req, res, next) {
             </div>
           </div>`,
       });
-    } catch (e) { /* silent */ }
-
-    // In-app notification
-    await db.query(`
-      INSERT INTO notifications (user_id, title, message, type)
-      VALUES ($1, 'Account approved', 'Your account has been approved. Welcome to SMARTACADEMIC!', 'system')
-    `, [id]);
-
-    res.json({ success: true, message: 'User approved and notified.' });
-  } catch (err) { next(err); }
-}
+    } catch (e) {
+      console.warn('[approval] Email send failed:', e.message);
+    }
 
     // In-app notification
     try {
@@ -112,7 +102,10 @@ async function reject(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
 
-    const user = await db.query('SELECT * FROM users WHERE id = $1 AND is_active = FALSE', [id]);
+    const user = await db.query(
+      'SELECT * FROM users WHERE id = $1 AND is_active = FALSE',
+      [id]
+    );
     if (!user.rows[0]) throw new AppError('Pending user not found.', 404);
 
     await db.query('DELETE FROM users WHERE id = $1', [id]);
