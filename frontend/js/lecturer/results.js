@@ -1,5 +1,6 @@
 ﻿// ============================================================
-// Lecturer Results — view + submit to HOD
+// SMARTACADEMIC — Lecturer Results
+// Grouped by course with per-course "Submit to HOD" buttons.
 // ============================================================
 
 'use strict';
@@ -17,7 +18,7 @@
       },
       ...opts,
     });
-    return { ok: res.ok, data: await res.json().catch(() => null) };
+    return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
   }
 
   function esc(s) {
@@ -47,103 +48,213 @@
     }, 2400);
   }
 
-  let state = {
+  const state = {
     course_id: new URLSearchParams(location.search).get('course') || '',
     items: [],
   };
 
+  /* ============================================================
+     LOAD COURSES for filter dropdown
+     ============================================================ */
   async function loadCourses() {
     const { ok, data } = await api('/api/lecturer/courses');
     if (!ok) return;
     const sel = $('#courseFilter');
-    if (sel) {
-      sel.innerHTML = '<option value="">All courses</option>' +
-        data.data.map(c => `<option value="${c.id}" ${String(c.id) === state.course_id ? 'selected' : ''}>${esc(c.code)} — ${esc(c.title)}</option>`).join('');
-    }
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">All my courses</option>' +
+      data.data.map(c => `<option value="${c.id}" ${String(c.id) === state.course_id ? 'selected' : ''}>${esc(c.code)} — ${esc(c.title)}</option>`).join('');
   }
 
+  /* ============================================================
+     LOAD RESULTS
+     ============================================================ */
   async function load() {
-    const tbody = $('#tbody');
-    if (!tbody) return;
-
-    tbody.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>';
+    const wrap = $('#resultsWrap');
+    wrap.innerHTML = '<div class="skeleton" style="height:100px;"></div>';
 
     const p = new URLSearchParams();
     if (state.course_id) p.set('course_id', state.course_id);
 
     const { ok, data } = await api('/api/lecturer/results?' + p.toString());
     if (!ok) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
+      wrap.innerHTML = '<div class="card"><div class="empty" style="padding:40px;"><div class="empty-icon">⚠️</div><h3>Failed to load results</h3></div></div>';
       return;
     }
 
     state.items = data.data || [];
 
     if (!state.items.length) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty" style="padding:40px;"><div class="empty-icon">📈</div><h3>No results yet</h3><p>Enter scores in Assessments first.</p></div></td></tr>';
+      wrap.innerHTML = `
+        <div class="card">
+          <div class="empty" style="padding:40px;">
+            <div class="empty-icon">📈</div>
+            <h3>No results yet</h3>
+            <p>Enter scores in the Assessments page first. Then results will appear here.</p>
+            <a href="/lecturer/assessments.html" class="btn btn-primary mt-3">Go to Assessments</a>
+          </div>
+        </div>`;
       return;
     }
+
+    renderGroupedByCourse();
+  }
+
+  function renderGroupedByCourse() {
+    const wrap = $('#resultsWrap');
+
+    // Group results by course
+    const groups = {};
+    state.items.forEach(r => {
+      const key = `${r.course_id}|${r.session_id}|${r.semester_id}`;
+      if (!groups[key]) {
+        groups[key] = {
+          course_id: r.course_id,
+          code: r.code,
+          title: r.title,
+          units: r.units,
+          session_id: r.session_id,
+          session_name: r.session_name,
+          semester_id: r.semester_id,
+          semester_name: r.semester_name,
+          results: [],
+        };
+      }
+      groups[key].results.push(r);
+    });
 
     const gradeBadge = g => ({
       A: 'badge-green', B: 'badge-blue', C: 'badge-blue',
       D: 'badge-yellow', E: 'badge-yellow', F: 'badge-red',
     }[g] || 'badge-gray');
 
-    // Group by course to render one submit row per course
-    const byCourse = {};
-    state.items.forEach(r => {
-      if (!byCourse[r.course_id]) byCourse[r.course_id] = { code: r.code, title: r.title, students: [] };
-      byCourse[r.course_id].students.push(r);
+    wrap.innerHTML = Object.values(groups).map(g => {
+      // Determine status from the first result (they're all the same per course)
+      const status = g.results[0].submission_status || 'draft';
+
+      const statusBadge = {
+        draft:     '<span class="badge badge-gray">Draft</span>',
+        submitted: '<span class="badge badge-yellow">Submitted</span>',
+        approved:  '<span class="badge badge-green">Approved</span>',
+        returned:  '<span class="badge badge-red">Returned</span>',
+      }[status] || '<span class="badge badge-gray">Draft</span>';
+
+      // Only show Submit button when draft or returned
+      const canSubmit = status === 'draft' || status === 'returned';
+
+      // Reason from HOD if returned
+      const returnReason = g.results[0].return_reason
+        ? `<div class="msg msg-error show" style="margin-top:12px;"><strong>HOD returned:</strong> ${esc(g.results[0].return_reason)}</div>`
+        : '';
+
+      return `
+        <div class="card mb-4" style="padding:0;overflow:hidden;">
+          <!-- Course header -->
+          <div style="padding:18px 22px;background:var(--primary-50);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:var(--primary-dark);">${esc(g.code)} — ${esc(g.title)}</div>
+              <div style="font-size:13px;color:var(--ink-3);margin-top:2px;">
+                ${esc(g.session_name)} · ${esc(g.semester_name)} · ${g.results.length} student${g.results.length === 1 ? '' : 's'}
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              ${statusBadge}
+              ${canSubmit
+                ? `<button class="btn btn-primary btn-sm" data-submit="${g.course_id}" data-session="${g.session_id}" data-semester="${g.semester_id}">📤 Submit to HOD</button>`
+                : ''}
+            </div>
+          </div>
+
+          ${returnReason}
+
+          <!-- Student results table -->
+          <div class="table-wrap" style="box-shadow:none;border:none;border-radius:0;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Matric</th>
+                  <th>CA</th>
+                  <th>Exam</th>
+                  <th>Total</th>
+                  <th>Grade</th>
+                  <th>Point</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${g.results.map(r => `
+                  <tr>
+                    <td>${esc(r.student_name)}</td>
+                    <td>${esc(r.matric_no)}</td>
+                    <td>${parseFloat(r.ca_score || 0).toFixed(1)}</td>
+                    <td>${parseFloat(r.exam_score || 0).toFixed(1)}</td>
+                    <td><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
+                    <td><span class="badge ${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
+                    <td>${parseFloat(r.grade_point || 0).toFixed(1)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Wire up submit buttons
+    wrap.querySelectorAll('[data-submit]').forEach(btn => {
+      btn.addEventListener('click', () => submitCourse(
+        parseInt(btn.dataset.submit, 10),
+        parseInt(btn.dataset.session, 10),
+        parseInt(btn.dataset.semester, 10)
+      ));
     });
-
-    tbody.innerHTML = Object.entries(byCourse).map(([courseId, c]) => `
-      <tr style="background:#f8fafc;font-weight:700;">
-        <td colspan="5">
-          <strong>${esc(c.code)}</strong> — ${esc(c.title)} (${c.students.length} students)
-        </td>
-        <td colspan="2" style="text-align:right;">
-          <button class="btn btn-primary btn-sm" data-submit="${courseId}" data-session="${c.students[0]?.session_id}" data-semester="${c.students[0]?.semester_id}">
-            📤 Submit to HOD
-          </button>
-        </td>
-      </tr>
-      ${c.students.map(r => `
-        <tr>
-          <td style="padding-left:32px;">${esc(r.student_name)}<div style="font-size:12px;color:var(--ink-3);">${esc(r.matric_no)}</div></td>
-          <td>${parseFloat(r.ca_score || 0).toFixed(1)}</td>
-          <td>${parseFloat(r.exam_score || 0).toFixed(1)}</td>
-          <td><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
-          <td><span class="badge ${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
-          <td>${parseFloat(r.grade_point || 0).toFixed(1)}</td>
-          <td><span class="badge badge-gray">${esc(r.submission_status || 'draft')}</span></td>
-        </tr>`).join('')}
-    `).join('');
-
-    tbody.querySelectorAll('[data-submit]').forEach(b =>
-      b.addEventListener('click', () => submit(parseInt(b.dataset.submit, 10), parseInt(b.dataset.session, 10), parseInt(b.dataset.semester, 10))));
   }
 
-  async function submit(courseId, sessionId, semesterId) {
-    if (!confirm('Submit these results to your HOD for approval? You will not be able to edit them until the HOD approves or returns them.')) return;
+  /* ============================================================
+     SUBMIT to HOD
+     ============================================================ */
+  async function submitCourse(courseId, sessionId, semesterId) {
+    if (!confirm('Submit these results to your HOD for approval?\n\nYou will not be able to edit them until the HOD approves or returns them.')) return;
 
     const { ok, data } = await api(`/api/lecturer/results/submit/${courseId}`, {
       method: 'POST',
       body: JSON.stringify({ session_id: sessionId, semester_id: semesterId }),
     });
 
-    if (!ok) { alert(data?.error || 'Failed to submit'); return; }
-    toast('Results submitted to HOD');
+    if (!ok) {
+      alert(data?.error || 'Failed to submit');
+      return;
+    }
+    toast(data.message || 'Results submitted to HOD');
     load();
   }
 
+  /* ============================================================
+     FILTERS
+     ============================================================ */
   function bind() {
     const sel = $('#courseFilter');
-    if (sel) sel.addEventListener('change', e => { state.course_id = e.target.value; load(); });
+    if (sel) {
+      sel.addEventListener('change', e => {
+        state.course_id = e.target.value;
+        load();
+      });
+    }
+    const reset = $('#btnReset');
+    if (reset) {
+      reset.addEventListener('click', () => {
+        state.course_id = '';
+        if (sel) sel.value = '';
+        load();
+      });
+    }
   }
 
+  /* ============================================================
+     BOOT
+     ============================================================ */
   async function boot() {
     if (window.__lecturerResultsBooted) return;
     window.__lecturerResultsBooted = true;
+    console.log('[lecturer/results] booting...');
     await loadCourses();
     bind();
     load();
