@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // HOD Result Submissions — review, approve, return
 // ============================================================
 
@@ -105,9 +105,7 @@
     const html = `
       <div class="table-wrap" style="box-shadow:none;max-height:500px;overflow-y:auto;">
         <table class="table">
-          <thead>
-            <tr><th>Student</th><th>Matric</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th></tr>
-          </thead>
+          <thead><tr><th>Student</th><th>Matric</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead>
           <tbody>
             ${results.map(r => `
               <tr>
@@ -122,7 +120,6 @@
         </table>
       </div>`;
 
-    // Show in a simple modal
     const modal = document.createElement('div');
     modal.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:grid;place-items:center;padding:20px;';
     modal.innerHTML = `
@@ -132,7 +129,7 @@
             <h2 style="margin:0;font-size:20px;">${esc(course.code)} — ${esc(course.title)}</h2>
             <p style="margin:4px 0 0;color:var(--ink-3);">${results.length} students</p>
           </div>
-          <button class="modal-close" data-close style="background:none;border:none;font-size:24px;cursor:pointer;">×</button>
+          <button data-close style="background:none;border:none;font-size:24px;cursor:pointer;">×</button>
         </div>
         ${html}
       </div>`;
@@ -142,7 +139,7 @@
   }
 
   async function doApprove(ds) {
-    if (!confirm('Approve these results? Students will see them once published by admin.')) return;
+    if (!confirm('Approve these results? Students will see them once admin publishes.')) return;
     const { ok, data } = await api(`/api/hod/result-submissions/${ds.approve}/approve`, {
       method: 'POST',
       body: JSON.stringify({ session_id: parseInt(ds.session, 10), semester_id: parseInt(ds.semester, 10) }),
@@ -155,7 +152,6 @@
   async function doReturn(ds) {
     const reason = prompt('Reason for returning (required):');
     if (!reason) return;
-
     const { ok, data } = await api(`/api/hod/result-submissions/${ds.return}/return`, {
       method: 'POST',
       body: JSON.stringify({
@@ -177,6 +173,7 @@
   function boot() {
     if (window.__hodResultSubmissionsBooted) return;
     window.__hodResultSubmissionsBooted = true;
+    console.log('[hod/result-submissions] booting...');
     bind();
     load();
   }

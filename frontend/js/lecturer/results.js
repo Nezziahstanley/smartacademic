@@ -1,6 +1,5 @@
 ﻿// ============================================================
-// SMARTACADEMIC — Lecturer Results
-// Grouped by course with per-course "Submit to HOD" buttons.
+// Lecturer Results — grouped by course with Submit to HOD
 // ============================================================
 
 'use strict';
@@ -53,22 +52,15 @@
     items: [],
   };
 
-  /* ============================================================
-     LOAD COURSES for filter dropdown
-     ============================================================ */
   async function loadCourses() {
     const { ok, data } = await api('/api/lecturer/courses');
     if (!ok) return;
     const sel = $('#courseFilter');
     if (!sel) return;
-
     sel.innerHTML = '<option value="">All my courses</option>' +
       data.data.map(c => `<option value="${c.id}" ${String(c.id) === state.course_id ? 'selected' : ''}>${esc(c.code)} — ${esc(c.title)}</option>`).join('');
   }
 
-  /* ============================================================
-     LOAD RESULTS
-     ============================================================ */
   async function load() {
     const wrap = $('#resultsWrap');
     wrap.innerHTML = '<div class="skeleton" style="height:100px;"></div>';
@@ -90,20 +82,19 @@
           <div class="empty" style="padding:40px;">
             <div class="empty-icon">📈</div>
             <h3>No results yet</h3>
-            <p>Enter scores in the Assessments page first. Then results will appear here.</p>
+            <p>Enter scores in Assessments first.</p>
             <a href="/lecturer/assessments.html" class="btn btn-primary mt-3">Go to Assessments</a>
           </div>
         </div>`;
       return;
     }
 
-    renderGroupedByCourse();
+    renderGrouped();
   }
 
-  function renderGroupedByCourse() {
+  function renderGrouped() {
     const wrap = $('#resultsWrap');
 
-    // Group results by course
     const groups = {};
     state.items.forEach(r => {
       const key = `${r.course_id}|${r.session_id}|${r.semester_id}`;
@@ -112,7 +103,6 @@
           course_id: r.course_id,
           code: r.code,
           title: r.title,
-          units: r.units,
           session_id: r.session_id,
           session_name: r.session_name,
           semester_id: r.semester_id,
@@ -129,9 +119,7 @@
     }[g] || 'badge-gray');
 
     wrap.innerHTML = Object.values(groups).map(g => {
-      // Determine status from the first result (they're all the same per course)
       const status = g.results[0].submission_status || 'draft';
-
       const statusBadge = {
         draft:     '<span class="badge badge-gray">Draft</span>',
         submitted: '<span class="badge badge-yellow">Submitted</span>',
@@ -139,17 +127,13 @@
         returned:  '<span class="badge badge-red">Returned</span>',
       }[status] || '<span class="badge badge-gray">Draft</span>';
 
-      // Only show Submit button when draft or returned
       const canSubmit = status === 'draft' || status === 'returned';
-
-      // Reason from HOD if returned
       const returnReason = g.results[0].return_reason
-        ? `<div class="msg msg-error show" style="margin-top:12px;"><strong>HOD returned:</strong> ${esc(g.results[0].return_reason)}</div>`
+        ? `<div class="msg msg-error show" style="margin:12px 22px;"><strong>HOD returned:</strong> ${esc(g.results[0].return_reason)}</div>`
         : '';
 
       return `
         <div class="card mb-4" style="padding:0;overflow:hidden;">
-          <!-- Course header -->
           <div style="padding:18px 22px;background:var(--primary-50);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div>
               <div style="font-size:16px;font-weight:800;color:var(--primary-dark);">${esc(g.code)} — ${esc(g.title)}</div>
@@ -167,18 +151,11 @@
 
           ${returnReason}
 
-          <!-- Student results table -->
           <div class="table-wrap" style="box-shadow:none;border:none;border-radius:0;">
             <table class="table">
               <thead>
                 <tr>
-                  <th>Student</th>
-                  <th>Matric</th>
-                  <th>CA</th>
-                  <th>Exam</th>
-                  <th>Total</th>
-                  <th>Grade</th>
-                  <th>Point</th>
+                  <th>Student</th><th>Matric</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th><th>Point</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,7 +175,6 @@
         </div>`;
     }).join('');
 
-    // Wire up submit buttons
     wrap.querySelectorAll('[data-submit]').forEach(btn => {
       btn.addEventListener('click', () => submitCourse(
         parseInt(btn.dataset.submit, 10),
@@ -208,9 +184,6 @@
     });
   }
 
-  /* ============================================================
-     SUBMIT to HOD
-     ============================================================ */
   async function submitCourse(courseId, sessionId, semesterId) {
     if (!confirm('Submit these results to your HOD for approval?\n\nYou will not be able to edit them until the HOD approves or returns them.')) return;
 
@@ -219,38 +192,22 @@
       body: JSON.stringify({ session_id: sessionId, semester_id: semesterId }),
     });
 
-    if (!ok) {
-      alert(data?.error || 'Failed to submit');
-      return;
-    }
+    if (!ok) { alert(data?.error || 'Failed to submit'); return; }
     toast(data.message || 'Results submitted to HOD');
     load();
   }
 
-  /* ============================================================
-     FILTERS
-     ============================================================ */
   function bind() {
     const sel = $('#courseFilter');
-    if (sel) {
-      sel.addEventListener('change', e => {
-        state.course_id = e.target.value;
-        load();
-      });
-    }
+    if (sel) sel.addEventListener('change', e => { state.course_id = e.target.value; load(); });
     const reset = $('#btnReset');
-    if (reset) {
-      reset.addEventListener('click', () => {
-        state.course_id = '';
-        if (sel) sel.value = '';
-        load();
-      });
-    }
+    if (reset) reset.addEventListener('click', () => {
+      state.course_id = '';
+      if (sel) sel.value = '';
+      load();
+    });
   }
 
-  /* ============================================================
-     BOOT
-     ============================================================ */
   async function boot() {
     if (window.__lecturerResultsBooted) return;
     window.__lecturerResultsBooted = true;
