@@ -1,6 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Admin Controller
-// Dashboard stats, activity feed, attendance trend, users CRUD.
+// Dashboard stats, activity feed, attendance trend, users CRUD,
+// fee tracking, result publishing (by department), result deletion.
 // ============================================================
 
 'use strict';
@@ -35,10 +36,7 @@ async function getDashboard(req, res, next) {
    ============================================================ */
 async function listUsers(req, res, next) {
   try {
-    const {
-      role, search, is_active,
-      page = 1, limit = 50,
-    } = req.query;
+    const { role, search, is_active, page = 1, limit = 50 } = req.query;
 
     const filters = {
       role: role || null,
@@ -77,11 +75,9 @@ async function createUser(req, res, next) {
   try {
     const { full_name, email, phone, password, role } = req.body;
 
-    // Validate role
     const roleRow = await adminModel.getRoleByName(role);
     if (!roleRow) throw new AppError('Invalid role.', 400);
 
-    // Email uniqueness
     if (await adminModel.emailExists(email)) {
       throw new AppError('Email already in use.', 409);
     }
@@ -153,7 +149,6 @@ async function toggleUserActive(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
 
-    // Prevent admin from deactivating themselves
     if (id === req.user.id) {
       throw new AppError('You cannot deactivate your own account.', 400);
     }
@@ -240,7 +235,7 @@ async function listRoles(req, res, next) {
 }
 
 /* ============================================================
-   UPDATE OWN PROFILE
+   UPDATE OWN PROFILE / CHANGE PASSWORD
    ============================================================ */
 async function updateOwnProfile(req, res, next) {
   try {
@@ -255,9 +250,6 @@ async function updateOwnProfile(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   CHANGE OWN PASSWORD
-   ============================================================ */
 async function changeOwnPassword(req, res, next) {
   try {
     const { current_password, new_password } = req.body;
@@ -288,10 +280,6 @@ async function changeOwnPassword(req, res, next) {
 /* ============================================================
    COURSE REGISTRATION — Approve / Drop / Mark Fees Paid
    ============================================================ */
-
-/**
- * POST /api/admin/registrations/:id/approve
- */
 async function approveRegistration(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -314,7 +302,6 @@ async function approveRegistration(req, res, next) {
        WHERE id = $1
     `, [id, req.user.id]);
 
-    // Notify student
     const st = await db.query('SELECT user_id FROM students WHERE id = $1', [r.rows[0].student_id]);
     if (st.rows[0]) {
       await db.query(`
@@ -334,9 +321,6 @@ async function approveRegistration(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/registrations/:id/drop
- */
 async function dropRegistration(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -368,11 +352,6 @@ async function dropRegistration(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/students/:id/mark-fees-paid
- * Body: { amount, receipt_no }
- * Marks student fees paid AND auto-approves all their pending registrations.
- */
 async function markFeesPaid(req, res, next) {
   try {
     const studentId = parseInt(req.params.id, 10);
@@ -381,7 +360,6 @@ async function markFeesPaid(req, res, next) {
     const s = await db.query('SELECT id, user_id FROM students WHERE id = $1', [studentId]);
     if (!s.rows[0]) throw new AppError('Student not found.', 404);
 
-    // 1. Mark fees paid
     await db.query(`
       UPDATE students
          SET school_fees_paid = TRUE,
@@ -391,7 +369,6 @@ async function markFeesPaid(req, res, next) {
        WHERE id = $1
     `, [studentId, amount || null, receipt_no || null]);
 
-    // 2. Auto-approve all their 'registered' registrations
     const approved = await db.query(`
       UPDATE course_registrations
          SET status = 'approved',
@@ -402,7 +379,6 @@ async function markFeesPaid(req, res, next) {
        RETURNING id
     `, [studentId, req.user.id]);
 
-    // 3. Notify student
     await db.query(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES ($1, 'Fees confirmed — courses approved', $2, 'result')
@@ -424,9 +400,6 @@ async function markFeesPaid(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/students/:id/mark-fees-unpaid
- */
 async function markFeesUnpaid(req, res, next) {
   try {
     const studentId = parseInt(req.params.id, 10);
@@ -451,9 +424,6 @@ async function markFeesUnpaid(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * GET /api/admin/registrations — updated to include fee status
- */
 async function listRegistrationsEnhanced(req, res, next) {
   try {
     const { session_id, semester_id, course_id, status, search } = req.query;
@@ -490,7 +460,7 @@ async function listRegistrationsEnhanced(req, res, next) {
 }
 
 /* ============================================================
-   PROFILE PHOTO UPLOAD (for admin's own profile)
+   PROFILE PHOTO
    ============================================================ */
 async function uploadOwnPhoto(req, res, next) {
   try {
@@ -498,13 +468,10 @@ async function uploadOwnPhoto(req, res, next) {
     if (!photo || !photo.startsWith('data:image/')) {
       throw new AppError('Invalid image. Must be a data URL.', 400);
     }
-
-    // Limit size — data URLs of 5MB images become ~7MB strings
     if (photo.length > 8_000_000) {
       throw new AppError('Image too large. Max ~2 MB after compression.', 400);
     }
 
-    // Ensure column exists (idempotent)
     await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
 
     await db.query(
@@ -523,9 +490,6 @@ async function uploadOwnPhoto(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   REMOVE PROFILE PHOTO
-   ============================================================ */
 async function removeOwnPhoto(req, res, next) {
   try {
     await db.query(
@@ -537,44 +501,364 @@ async function removeOwnPhoto(req, res, next) {
 }
 
 /* ============================================================
-   PUBLISH RESULTS (Admin)
+   PUBLISH RESULTS — helpers
+   ============================================================ */
+
+/**
+ * Send batched "result published" notifications to students.
+ * Grouped per student so we don't send N notifications for N courses.
+ */
+async function notifyPublishedStudents(rows) {
+  if (!rows || !rows.length) return;
+
+  const byStudent = new Map();
+  for (const r of rows) {
+    if (!byStudent.has(r.student_id)) byStudent.set(r.student_id, []);
+    byStudent.get(r.student_id).push(r.course_id);
+  }
+
+  const studentIds = Array.from(byStudent.keys());
+
+  const users = await db.query(`
+    SELECT s.id AS student_id, s.user_id
+      FROM students s
+     WHERE s.id = ANY($1)
+  `, [studentIds]);
+
+  const allCourseIds = Array.from(new Set(rows.map(r => r.course_id)));
+  const courses = await db.query(
+    'SELECT id, code FROM courses WHERE id = ANY($1)',
+    [allCourseIds]
+  );
+  const codeMap = Object.fromEntries(courses.rows.map(c => [c.id, c.code]));
+
+  for (const u of users.rows) {
+    const courseIds = byStudent.get(u.student_id) || [];
+    const codes = courseIds.map(id => codeMap[id]).filter(Boolean);
+    if (!codes.length) continue;
+
+    const summary = codes.length === 1
+      ? `Your result for ${codes[0]} is now available.`
+      : `${codes.length} of your results are now available.`;
+
+    await db.query(`
+      INSERT INTO notifications (user_id, title, message, type)
+      VALUES ($1, 'Result published', $2, 'result')
+    `, [u.user_id, summary]);
+  }
+}
+
+/* ============================================================
+   PUBLISH — GROUPED BY DEPARTMENT
    ============================================================ */
 
 /**
  * GET /api/admin/publish/result-submissions
- * Lists courses with approved results ready to publish.
+ * Query: status=approved (default)
+ *
+ * Returns an array of departments, each with:
+ *   { department_id, department_name,
+ *     totals: { courses, students, published, unpublished },
+ *     status: 'published' | 'partial' | 'approved',
+ *     courses: [ { course_id, code, title, level,
+ *                  session_id, session_name, semester_id, semester_name,
+ *                  students, published_count, unpublished_count,
+ *                  approved_at } ] }
  */
-async function listPublishableResults(req, res, next) {
+async function listPublishableResultsGrouped(req, res, next) {
   try {
     const { status = 'approved' } = req.query;
 
     const r = await db.query(`
-      SELECT c.id AS course_id, c.code, c.title,
-             d.name AS department_name,
-             sess.id AS session_id, sess.name AS session_name,
-             sem.id AS semester_id, sem.name AS semester_name,
-             COUNT(r.id)::int AS students,
-             MAX(r.is_published::int) AS published_count,
-             MAX(r.approved_at) AS approved_at
-        FROM results r
-        JOIN courses c ON c.id = r.course_id
-        JOIN departments d ON d.id = c.department_id
-        JOIN sessions sess ON sess.id = r.session_id
-        JOIN semesters sem ON sem.id = r.semester_id
-       WHERE r.submission_status = $1
-       GROUP BY c.id, c.code, c.title, d.name,
-                sess.id, sess.name, sem.id, sem.name
-       ORDER BY MAX(r.approved_at) DESC
+      SELECT
+        d.id   AS department_id,
+        d.name AS department_name,
+        c.id   AS course_id,
+        c.code, c.title, c.level,
+        sess.id   AS session_id,  sess.name AS session_name,
+        sem.id    AS semester_id, sem.name  AS semester_name,
+        COUNT(r.id)::int                                    AS students,
+        COUNT(r.id) FILTER (WHERE r.is_published)::int      AS published_count,
+        COUNT(r.id) FILTER (WHERE NOT r.is_published)::int  AS unpublished_count,
+        MAX(r.approved_at)                                  AS approved_at
+      FROM results r
+      JOIN courses c      ON c.id  = r.course_id
+      JOIN departments d  ON d.id  = c.department_id
+      JOIN sessions sess  ON sess.id = r.session_id
+      JOIN semesters sem  ON sem.id  = r.semester_id
+      WHERE r.submission_status = $1
+      GROUP BY d.id, d.name, c.id, c.code, c.title, c.level,
+               sess.id, sess.name, sem.id, sem.name
+      ORDER BY d.name, c.code
     `, [status]);
 
-    res.json({ success: true, data: r.rows });
+    // Group by department in JS
+    const deptMap = new Map();
+    for (const row of r.rows) {
+      if (!deptMap.has(row.department_id)) {
+        deptMap.set(row.department_id, {
+          department_id:   row.department_id,
+          department_name: row.department_name,
+          courses: [],
+          totals: { courses: 0, students: 0, published: 0, unpublished: 0 },
+          status: 'approved',
+        });
+      }
+      const dept = deptMap.get(row.department_id);
+      dept.courses.push(row);
+      dept.totals.courses++;
+      dept.totals.students    += row.students;
+      dept.totals.published   += row.published_count;
+      dept.totals.unpublished += row.unpublished_count;
+    }
+
+    for (const dept of deptMap.values()) {
+      if (dept.totals.unpublished === 0 && dept.totals.published > 0) {
+        dept.status = 'published';
+      } else if (dept.totals.published > 0 && dept.totals.unpublished > 0) {
+        dept.status = 'partial';
+      } else {
+        dept.status = 'approved';
+      }
+    }
+
+    res.json({ success: true, data: Array.from(deptMap.values()) });
   } catch (err) { next(err); }
 }
 
 /**
- * POST /api/admin/publish/:courseId
- * Publishes approved results for a course.
+ * POST /api/admin/publish/department/:departmentId
+ * Body: { session_id, semester_id }
  */
+async function publishDepartment(req, res, next) {
+  try {
+    const departmentId = parseInt(req.params.departmentId, 10);
+    const { session_id, semester_id } = req.body;
+
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    const dept = await db.query('SELECT name FROM departments WHERE id = $1', [departmentId]);
+    if (!dept.rows[0]) throw new AppError('Department not found.', 404);
+
+    const upd = await db.query(`
+      UPDATE results r
+         SET is_published = TRUE
+        FROM courses c
+       WHERE r.course_id = c.id
+         AND c.department_id = $1
+         AND r.session_id = $2
+         AND r.semester_id = $3
+         AND r.submission_status = 'approved'
+         AND r.is_published = FALSE
+      RETURNING r.id, r.student_id, r.course_id
+    `, [departmentId, session_id, semester_id]);
+
+    if (upd.rowCount > 0) {
+      await notifyPublishedStudents(upd.rows);
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'publish_department',
+      module: 'results',
+      affected_record: `department:${departmentId}`,
+      details: { published: upd.rowCount, dept: dept.rows[0].name },
+      ip_address: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `${upd.rowCount} result(s) published for ${dept.rows[0].name}.`,
+      data: { published: upd.rowCount },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/admin/publish/departments-bulk
+ * Body: { department_ids: [...], session_id, semester_id }
+ */
+async function publishDepartmentsBulk(req, res, next) {
+  try {
+    const { department_ids, session_id, semester_id } = req.body;
+
+    if (!Array.isArray(department_ids) || !department_ids.length) {
+      throw new AppError('department_ids array required.', 400);
+    }
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    const ids = department_ids.map(x => parseInt(x, 10)).filter(Boolean);
+
+    const upd = await db.query(`
+      UPDATE results r
+         SET is_published = TRUE
+        FROM courses c
+       WHERE r.course_id = c.id
+         AND c.department_id = ANY($1)
+         AND r.session_id = $2
+         AND r.semester_id = $3
+         AND r.submission_status = 'approved'
+         AND r.is_published = FALSE
+      RETURNING r.id, r.student_id, r.course_id
+    `, [ids, session_id, semester_id]);
+
+    if (upd.rowCount > 0) {
+      await notifyPublishedStudents(upd.rows);
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'publish_departments_bulk',
+      module: 'results',
+      details: { departments: ids.length, published: upd.rowCount },
+      ip_address: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `${upd.rowCount} result(s) published across ${ids.length} department(s).`,
+      data: { published: upd.rowCount, departments: ids.length },
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/admin/unpublish/department/:departmentId
+ * Body: { session_id, semester_id }
+ */
+async function unpublishDepartment(req, res, next) {
+  try {
+    const departmentId = parseInt(req.params.departmentId, 10);
+    const { session_id, semester_id } = req.body;
+
+    if (!session_id || !semester_id) {
+      throw new AppError('session_id and semester_id required.', 400);
+    }
+
+    const upd = await db.query(`
+      UPDATE results r
+         SET is_published = FALSE
+        FROM courses c
+       WHERE r.course_id = c.id
+         AND c.department_id = $1
+         AND r.session_id = $2
+         AND r.semester_id = $3
+         AND r.is_published = TRUE
+      RETURNING r.id
+    `, [departmentId, session_id, semester_id]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'unpublish_department',
+      module: 'results',
+      affected_record: `department:${departmentId}`,
+      details: { unpublished: upd.rowCount },
+    });
+
+    res.json({
+      success: true,
+      message: `${upd.rowCount} result(s) unpublished.`,
+      data: { unpublished: upd.rowCount },
+    });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
+   DELETE RESULT — policy-aware
+   - published → blocked
+   - approved  → soft-return to lecturer
+   - other     → hard delete
+   ============================================================ */
+async function deleteResultSafely(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    const r = await db.query(`
+      SELECT r.id, r.is_published, r.submission_status,
+             r.student_id, r.course_id,
+             c.code AS course_code
+        FROM results r
+        JOIN courses c ON c.id = r.course_id
+       WHERE r.id = $1
+    `, [id]);
+    if (!r.rows[0]) throw new AppError('Result not found.', 404);
+
+    const row = r.rows[0];
+
+    if (row.is_published) {
+      throw new AppError(
+        'Cannot delete a published result. Unpublish it first.',
+        409
+      );
+    }
+
+    if (row.submission_status === 'approved') {
+      await db.query(`
+        UPDATE results
+           SET submission_status = 'returned',
+               return_reason = 'Deleted by administrator.',
+               approved_at = NULL,
+               approved_by = NULL
+         WHERE id = $1
+      `, [id]);
+
+      const lect = await db.query(`
+        SELECT l.user_id
+          FROM courses c
+          JOIN lecturers l ON l.id = c.lecturer_id
+         WHERE c.id = $1
+      `, [row.course_id]);
+
+      if (lect.rows[0] && lect.rows[0].user_id) {
+        await db.query(`
+          INSERT INTO notifications (user_id, title, message, type)
+          VALUES ($1, 'Result returned', $2, 'system')
+        `, [
+          lect.rows[0].user_id,
+          `A result you submitted for ${row.course_code} was removed by the administrator. Please review and resubmit.`,
+        ]);
+      }
+
+      await adminModel.writeAudit({
+        user_id: req.user.id,
+        action: 'return_result',
+        module: 'results',
+        affected_record: `result:${id}`,
+        details: { reason: 'Deleted by administrator' },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Approved result returned to lecturer (soft-deleted).',
+      });
+    }
+
+    await db.query('DELETE FROM results WHERE id = $1', [id]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'delete_result',
+      module: 'results',
+      affected_record: `result:${id}`,
+    });
+
+    res.json({ success: true, message: 'Result deleted.' });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
+   LEGACY PUBLISH ENDPOINTS (kept for backward compatibility)
+   ============================================================ */
+
+async function listPublishableResults(req, res, next) {
+  // Redirect to grouped version
+  return listPublishableResultsGrouped(req, res, next);
+}
+
 async function publishResults(req, res, next) {
   try {
     const courseId = parseInt(req.params.courseId, 10);
@@ -588,25 +872,11 @@ async function publishResults(req, res, next) {
          AND semester_id = $3
          AND submission_status = 'approved'
          AND is_published = FALSE
-       RETURNING id
+       RETURNING id, student_id, course_id
     `, [courseId, session_id, semester_id]);
 
-    // Notify all students in this course
-    const students = await db.query(`
-      SELECT DISTINCT u.id
-        FROM results r
-        JOIN students s ON s.id = r.student_id
-        JOIN users u ON u.id = s.user_id
-       WHERE r.course_id = $1 AND r.session_id = $2 AND r.semester_id = $3
-    `, [courseId, session_id, semester_id]);
-
-    const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
-
-    for (const st of students.rows) {
-      await db.query(`
-        INSERT INTO notifications (user_id, title, message, type)
-        VALUES ($1, 'Result published', $2, 'result')
-      `, [st.id, `Your result for ${course.rows[0].code} — ${course.rows[0].title} is now available.`]);
+    if (upd.rowCount > 0) {
+      await notifyPublishedStudents(upd.rows);
     }
 
     await adminModel.writeAudit({
@@ -621,9 +891,6 @@ async function publishResults(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/unpublish/:courseId
- */
 async function unpublishResults(req, res, next) {
   try {
     const courseId = parseInt(req.params.courseId, 10);
@@ -642,10 +909,6 @@ async function unpublishResults(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   BULK PUBLISH — Admin publishes multiple courses at once
-   Body: { course_ids: [...], session_id, semester_id }
-   ============================================================ */
 async function publishResultsBulk(req, res, next) {
   try {
     const { course_ids, session_id, semester_id } = req.body;
@@ -657,64 +920,50 @@ async function publishResultsBulk(req, res, next) {
       throw new AppError('session_id and semester_id required.', 400);
     }
 
-    let totalPublished = 0;
-    const publishedCourses = [];
+    const ids = course_ids.map(x => parseInt(x, 10)).filter(Boolean);
 
-    for (const cid of course_ids) {
-      const courseId = parseInt(cid, 10);
+    const upd = await db.query(`
+      UPDATE results
+         SET is_published = TRUE
+       WHERE course_id = ANY($1)
+         AND session_id = $2
+         AND semester_id = $3
+         AND submission_status = 'approved'
+         AND is_published = FALSE
+      RETURNING id, student_id, course_id
+    `, [ids, session_id, semester_id]);
 
-      const upd = await db.query(`
-        UPDATE results
-           SET is_published = TRUE
-         WHERE course_id = $1
-           AND session_id = $2
-           AND semester_id = $3
-           AND submission_status = 'approved'
-           AND is_published = FALSE
-        RETURNING id
-      `, [courseId, session_id, semester_id]);
-
-      if (upd.rowCount > 0) {
-        totalPublished += upd.rowCount;
-        publishedCourses.push({ course_id: courseId, count: upd.rowCount });
-
-        const students = await db.query(`
-          SELECT DISTINCT u.id
-            FROM results r
-            JOIN students s ON s.id = r.student_id
-            JOIN users u ON u.id = s.user_id
-           WHERE r.course_id = $1 AND r.session_id = $2 AND r.semester_id = $3
-        `, [courseId, session_id, semester_id]);
-        const course = await db.query('SELECT code, title FROM courses WHERE id = $1', [courseId]);
-
-        for (const st of students.rows) {
-          await db.query(`
-            INSERT INTO notifications (user_id, title, message, type)
-            VALUES ($1, 'Result published', $2, 'result')
-          `, [st.id, `Your result for ${course.rows[0].code} — ${course.rows[0].title} is now available.`]);
-        }
-      }
+    if (upd.rowCount > 0) {
+      await notifyPublishedStudents(upd.rows);
     }
 
     await adminModel.writeAudit({
       user_id: req.user.id,
       action: 'publish_results_bulk',
       module: 'results',
-      details: { courses: publishedCourses.length, students: totalPublished },
+      details: { courses: ids.length, published: upd.rowCount },
     });
 
     res.json({
       success: true,
-      message: `${publishedCourses.length} course(s) published, ${totalPublished} student results in total.`,
-      data: { published: publishedCourses, totalPublished },
+      message: `${ids.length} course(s) processed, ${upd.rowCount} student results published.`,
+      data: { published: upd.rowCount },
     });
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   EXPORTS
+   ============================================================ */
 module.exports = {
+  // Profile photo
   uploadOwnPhoto,
   removeOwnPhoto,
+
+  // Dashboard
   getDashboard,
+
+  // Users
   listUsers,
   getUser,
   createUser,
@@ -723,14 +972,28 @@ module.exports = {
   resetUserPassword,
   deleteUser,
   listRoles,
+
+  // Own profile
   updateOwnProfile,
   changeOwnPassword,
-  // NEW:
+
+  // Registrations
   approveRegistration,
   dropRegistration,
   markFeesPaid,
   markFeesUnpaid,
   listRegistrationsEnhanced,
+
+  // Publish results (grouped by department)
+  listPublishableResultsGrouped,
+  publishDepartment,
+  publishDepartmentsBulk,
+  unpublishDepartment,
+
+  // Safe delete
+  deleteResultSafely,
+
+  // Legacy publish endpoints
   listPublishableResults,
   publishResults,
   unpublishResults,

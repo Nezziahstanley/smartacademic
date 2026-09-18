@@ -8,8 +8,114 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .publish-bar {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .publish-bar.active { display: flex; flex-wrap: wrap; }
+    .publish-bar .bulk-info {
+      flex: 1;
+      font-size: 14px;
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .dept-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 14px;
+      overflow: hidden;
+      transition: box-shadow .2s;
+    }
+    .dept-card:hover { box-shadow: var(--shadow); }
+
+    .dept-head {
+      display: grid;
+      grid-template-columns: 40px 1fr auto auto auto;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dept-head input[type="checkbox"] {
+      width: 18px; height: 18px; cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .dept-name {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dept-name .chev {
+      font-size: 12px;
+      color: var(--ink-3);
+      transition: transform .2s;
+    }
+    .dept-card.open .chev { transform: rotate(90deg); }
+
+    .dept-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+    .dept-meta strong { color: var(--ink); }
+
+    .dept-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .dept-body {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .dept-card.open .dept-body { display: block; }
+
+    .dept-body .table { background: #fff; }
+    .dept-body .table th { background: #f8fafc; color: var(--ink-2); }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .status-approved  { background: #eff6ff; color: #1e40af; }
+    .status-partial   { background: #fef3c7; color: #92400e; }
+    .status-published { background: #dcfce7; color: #166534; }
+
+    @media (max-width: 800px) {
+      .dept-head {
+        grid-template-columns: 40px 1fr;
+        grid-template-rows: auto auto;
+      }
+      .dept-meta, .dept-actions { grid-column: 1 / -1; flex-wrap: wrap; }
+    }
+  </style>
 </head>
 <body>
+
   <div class="app-shell">
     <div id="sidebarSlot"></div>
     <div class="main">
@@ -19,32 +125,40 @@
         <div class="page-header">
           <div>
             <h1>Publish Results</h1>
-            <p>Publish HOD-approved results so students can see them.</p>
+            <p>Publish HOD-approved results so students can see them. Grouped by department.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnRefresh">↻ Refresh</button>
           </div>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Course</th>
-                <th>Department</th>
-                <th>Session</th>
-                <th>Semester</th>
-                <th>Students</th>
-                <th>Approved</th>
-                <th style="text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="tbody">
-              <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
-            </tbody>
-          </table>
+        <!-- Bulk action bar -->
+        <div class="publish-bar" id="bulkBar">
+          <div class="bulk-info">
+            <strong id="bulkCount">0</strong> department(s) selected — <strong id="bulkStudents">0</strong> results ready
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnBulkPublish">
+            📤 Publish Selected Departments
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btnBulkClear">Clear</button>
+        </div>
+
+        <!-- Select all / dept list -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:0 6px;">
+          <input type="checkbox" id="checkAllDepts" style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);" />
+          <label for="checkAllDepts" style="font-weight:700;font-size:14px;cursor:pointer;">Select all departments</label>
+        </div>
+
+        <div id="deptList">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
         </div>
 
       </main>
     </div>
   </div>
+
+  <div id="modalRoot"></div>
 
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
@@ -52,59 +166,478 @@
   <script>
     'use strict';
     (function () {
-      const token = localStorage.getItem('sa_token');
-      function $ (s) { return document.querySelector(s); }
-      function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+      const { $, api, esc, openModal, toast } = window.SACrud;
 
-      async function api(p, opts = {}) {
-        const r = await fetch(p, {
-          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-          ...opts,
-        });
-        return { ok: r.ok, data: await r.json().catch(() => null) };
-      }
+      const state = {
+        departments: [],
+        selected: new Set(),
+      };
 
+      /* ============================================================
+         LOAD
+         ============================================================ */
       async function load() {
-        const tbody = $('#tbody');
-        tbody.innerHTML = '<tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>';
+        const list = $('#deptList');
+        list.innerHTML = '<div class="skeleton" style="height:80px;"></div>';
+        state.selected.clear();
+        updateBulkBar();
 
         const { ok, data } = await api('/api/admin/publish/result-submissions?status=approved');
-        if (!ok) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">Failed.</td></tr>'; return; }
-
-        if (!data.data.length) {
-          tbody.innerHTML = '<tr><td colspan="7"><div class="empty" style="padding:40px;"><div class="empty-icon">📤</div><h3>No approved results</h3></div></td></tr>';
+        if (!ok) {
+          list.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load</h3></div>';
           return;
         }
 
-        tbody.innerHTML = data.data.map(s => `
-          <tr>
-            <td><strong>${esc(s.code)}</strong> — ${esc(s.title)}</td>
-            <td>${esc(s.department_name)}</td>
-            <td>${esc(s.session_name)}</td>
-            <td>${esc(s.semester_name)}</td>
-            <td>${s.students}</td>
-            <td>${s.approved_at ? new Date(s.approved_at).toLocaleString() : '—'}</td>
-            <td>
-              <div class="actions">
-                <button class="btn btn-primary btn-sm" data-pub="${s.course_id}" data-session="${s.session_id}" data-semester="${s.semester_id}">📤 Publish</button>
-              </div>
-            </td>
-          </tr>`).join('');
+        state.departments = data.data || [];
 
-        tbody.querySelectorAll('[data-pub]').forEach(b =>
-          b.addEventListener('click', async () => {
-            if (!confirm('Publish results for this course?')) return;
-            const { ok, data } = await api(`/api/admin/publish/${b.dataset.pub}`, {
-              method: 'POST',
-              body: JSON.stringify({ session_id: parseInt(b.dataset.session, 10), semester_id: parseInt(b.dataset.semester, 10) }),
-            });
-            if (!ok) { alert(data?.error || 'Failed'); return; }
-            alert(data.message || 'Published');
-            load();
-          }));
+        if (!state.departments.length) {
+          list.innerHTML = `
+            <div class="empty" style="padding:40px;">
+              <div class="empty-icon">🎉</div>
+              <h3>No approved results pending</h3>
+              <p>Nothing to publish right now.</p>
+            </div>`;
+          updateCheckAll();
+          return;
+        }
+
+        render();
+        updateCheckAll();
       }
 
-      document.addEventListener('sa:layout-ready', load);
+      /* ============================================================
+         RENDER
+         ============================================================ */
+      function render() {
+        const list = $('#deptList');
+
+        list.innerHTML = state.departments.map(d => {
+          const statusClass = {
+            approved: 'status-approved',
+            partial: 'status-partial',
+            published: 'status-published',
+          }[d.status] || 'status-approved';
+
+          const statusLabel = {
+            approved: '📋 Approved',
+            partial: '⏳ Partial',
+            published: '✅ Published',
+          }[d.status] || d.status;
+
+          const canPublish = d.totals.unpublished > 0;
+
+          return `
+            <div class="dept-card" data-dept="${d.department_id}">
+              <div class="dept-head">
+                <input type="checkbox" data-select-dept="${d.department_id}"
+                       ${state.selected.has(d.department_id) ? 'checked' : ''}
+                       ${!canPublish ? 'disabled title="Nothing left to publish"' : ''} />
+                <div class="dept-name">
+                  <span class="chev">▶</span>
+                  ${esc(d.department_name)}
+                </div>
+                <div class="dept-meta">
+                  <span><strong>${d.totals.courses}</strong> course(s)</span>
+                  <span><strong>${d.totals.unpublished}</strong> ready</span>
+                  <span><strong>${d.totals.published}</strong> published</span>
+                </div>
+                <span class="status-pill ${statusClass}">${statusLabel}</span>
+                <div class="dept-actions">
+                  ${canPublish ? `
+                    <button class="btn btn-primary btn-sm" data-publish-dept="${d.department_id}">
+                      📤 Publish All
+                    </button>
+                  ` : ''}
+                  ${d.totals.published > 0 ? `
+                    <button class="btn btn-ghost btn-sm" data-unpublish-dept="${d.department_id}">
+                      Unpublish
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+
+              <div class="dept-body">
+                <div class="table-wrap" style="box-shadow:none;border:none;">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Course</th>
+                        <th>Session</th>
+                        <th>Semester</th>
+                        <th style="text-align:right;">Students</th>
+                        <th style="text-align:right;">Published</th>
+                        <th>Status</th>
+                        <th style="text-align:right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${d.courses.map(c => {
+                        const cStatus = c.published_count === c.students
+                          ? { cls: 'status-published', txt: '✅ Published' }
+                          : c.published_count > 0
+                            ? { cls: 'status-partial', txt: '⏳ Partial' }
+                            : { cls: 'status-approved', txt: '📋 Approved' };
+
+                        return `
+                          <tr>
+                            <td>
+                              <strong>${esc(c.code)}</strong> — ${esc(c.title)}
+                              <div style="font-size:11.5px;color:var(--ink-3);">L${c.level}</div>
+                            </td>
+                            <td>${esc(c.session_name)}</td>
+                            <td>${esc(c.semester_name)}</td>
+                            <td style="text-align:right;">${c.students}</td>
+                            <td style="text-align:right;">${c.published_count} / ${c.students}</td>
+                            <td><span class="status-pill ${cStatus.cls}">${cStatus.txt}</span></td>
+                            <td style="text-align:right;">
+                              <div class="actions">
+                                <button class="btn btn-ghost btn-sm"
+                                        data-view-course="${c.course_id}"
+                                        data-session="${c.session_id}"
+                                        data-semester="${c.semester_id}">
+                                  View
+                                </button>
+                              </div>
+                            </td>
+                          </tr>`;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+        // Expand/collapse
+        list.querySelectorAll('.dept-head').forEach(head => {
+          head.addEventListener('click', (e) => {
+            if (e.target.closest('input, button')) return;
+            head.closest('.dept-card').classList.toggle('open');
+          });
+        });
+
+        // Per-department selection
+        list.querySelectorAll('[data-select-dept]').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const id = parseInt(cb.dataset.selectDept, 10);
+            if (cb.checked) state.selected.add(id);
+            else            state.selected.delete(id);
+            updateBulkBar();
+            updateCheckAll();
+          });
+        });
+
+        // Per-department publish
+        list.querySelectorAll('[data-publish-dept]').forEach(b => {
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            publishOneDept(parseInt(b.dataset.publishDept, 10));
+          });
+        });
+
+        // Per-department unpublish
+        list.querySelectorAll('[data-unpublish-dept]').forEach(b => {
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            unpublishOneDept(parseInt(b.dataset.unpublishDept, 10));
+          });
+        });
+
+        // View course detail
+        list.querySelectorAll('[data-view-course]').forEach(b => {
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCourseDetail(b.dataset);
+          });
+        });
+
+        // Sync checkboxes to state
+        list.querySelectorAll('[data-select-dept]').forEach(cb => {
+          const id = parseInt(cb.dataset.selectDept, 10);
+          cb.checked = state.selected.has(id);
+        });
+      }
+
+      /* ============================================================
+         BULK BAR
+         ============================================================ */
+      function updateBulkBar() {
+        const bar = $('#bulkBar');
+        const count = state.selected.size;
+        let students = 0;
+        for (const d of state.departments) {
+          if (state.selected.has(d.department_id)) students += d.totals.unpublished;
+        }
+        $('#bulkCount').textContent = count;
+        $('#bulkStudents').textContent = students;
+        bar.classList.toggle('active', count > 0);
+      }
+
+      function updateCheckAll() {
+        const checkAll = $('#checkAllDepts');
+        const eligible = state.departments.filter(d => d.totals.unpublished > 0);
+        const all = eligible.length > 0 && eligible.every(d => state.selected.has(d.department_id));
+        const any = eligible.some(d => state.selected.has(d.department_id));
+        checkAll.checked = all;
+        checkAll.indeterminate = !all && any;
+      }
+
+      /* ============================================================
+         PUBLISH — SINGLE DEPARTMENT
+         ============================================================ */
+      function publishOneDept(departmentId) {
+        const dept = state.departments.find(d => d.department_id === departmentId);
+        if (!dept) return;
+        if (dept.totals.unpublished === 0) {
+          toast('Nothing left to publish for this department', 'error');
+          return;
+        }
+
+        openModal({
+          title: `Publish ${dept.department_name} results?`,
+          size: 'sm',
+          confirmText: `Publish ${dept.totals.unpublished} results`,
+          body: `
+            <p>You are about to publish <strong>${dept.totals.unpublished}</strong> approved result(s) across <strong>${dept.totals.courses}</strong> course(s) in <strong>${esc(dept.department_name)}</strong>.</p>
+            <p style="margin-top:10px;color:var(--ink-3);font-size:13px;">
+              Students will see their grades immediately after publishing.
+            </p>
+          `,
+          onConfirm: async (_b, close) => {
+            close();
+            await doBulkPublish([departmentId]);
+          },
+        });
+      }
+
+      /* ============================================================
+         UNPUBLISH — SINGLE DEPARTMENT
+         ============================================================ */
+      function unpublishOneDept(departmentId) {
+        const dept = state.departments.find(d => d.department_id === departmentId);
+        if (!dept) return;
+
+        openModal({
+          title: `Unpublish ${dept.department_name} results?`,
+          size: 'sm',
+          confirmText: `Unpublish ${dept.totals.published} results`,
+          body: `
+            <p style="color:var(--red);">
+              This will hide <strong>${dept.totals.published}</strong> published result(s) from students in <strong>${esc(dept.department_name)}</strong>.
+            </p>
+            <p style="margin-top:10px;color:var(--ink-3);font-size:13px;">
+              You can publish again at any time.
+            </p>
+          `,
+          onConfirm: async (_b, close) => {
+            close();
+            const first = dept.courses[0];
+            const { ok, data } = await api(
+              `/api/admin/unpublish/department/${departmentId}`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  session_id:  first.session_id,
+                  semester_id: first.semester_id,
+                }),
+              }
+            );
+            if (!ok) { alert(data?.error || 'Failed'); return; }
+            toast(data.message || 'Unpublished');
+            load();
+          },
+        });
+      }
+
+      /* ============================================================
+         BULK PUBLISH
+         ============================================================ */
+      async function doBulkPublish(departmentIds) {
+        // Get session+semester from the first dept's first course
+        const firstDept = state.departments.find(d => d.department_id === departmentIds[0]);
+        const firstCourse = firstDept?.courses[0];
+        if (!firstCourse) { toast('Nothing to publish', 'error'); return; }
+
+        const btn = $('#btnBulkPublish');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Publishing...';
+
+        try {
+          const { ok, data } = await api('/api/admin/publish/departments-bulk', {
+            method: 'POST',
+            body: JSON.stringify({
+              department_ids: departmentIds,
+              session_id:  firstCourse.session_id,
+              semester_id: firstCourse.semester_id,
+            }),
+          });
+
+          if (!ok) { alert(data?.error || 'Publish failed'); return; }
+          toast(data.message || 'Published successfully');
+          state.selected.clear();
+          load();
+        } finally {
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      }
+
+      /* ============================================================
+         COURSE DETAIL MODAL (with delete per row)
+         ============================================================ */
+      async function openCourseDetail(ds) {
+        const courseId  = parseInt(ds.viewCourse, 10);
+        const sessionId = parseInt(ds.session, 10);
+        const semId     = parseInt(ds.semester, 10);
+
+        const { ok, data } = await api(
+          `/api/admin/results?course_id=${courseId}&session_id=${sessionId}&semester_id=${semId}`
+        );
+        if (!ok) { alert('Failed to load details'); return; }
+
+        const rows = data.data || [];
+        const course = rows[0] || {};
+        const publishedCount = rows.filter(r => r.is_published).length;
+
+        const html = `
+          <div class="msg msg-info show" style="margin-bottom:14px;">
+            <strong>${esc(course.code || '')} — ${esc(course.title || '')}</strong> · ${rows.length} student(s) ·
+            ${publishedCount} published · ${rows.length - publishedCount} pending
+          </div>
+          <div class="table-wrap" style="box-shadow:none;max-height:480px;overflow-y:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Matric</th>
+                  <th>CA</th>
+                  <th>Exam</th>
+                  <th>Total</th>
+                  <th>Grade</th>
+                  <th>Status</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr data-result-row="${r.id}">
+                    <td>${esc(r.student_name)}</td>
+                    <td>${esc(r.matric_no)}</td>
+                    <td>${parseFloat(r.ca_score || 0).toFixed(1)}</td>
+                    <td>${parseFloat(r.exam_score || 0).toFixed(1)}</td>
+                    <td><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
+                    <td><span class="badge badge-${r.grade === 'A' ? 'green' : r.grade === 'F' ? 'red' : 'blue'}">${esc(r.grade || '—')}</span></td>
+                    <td>${r.is_published
+                      ? '<span class="status-pill status-published">✅ Published</span>'
+                      : '<span class="status-pill status-approved">📋 Approved</span>'}</td>
+                    <td style="text-align:right;">
+                      <div class="actions">
+                        <button class="btn btn-danger btn-sm"
+                                data-del-result="${r.id}"
+                                ${r.is_published ? 'disabled title="Unpublish before deleting"' : ''}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        openModal({
+          title: 'Course Results Detail',
+          subtitle: `${esc(course.code || '')} — ${esc(course.title || '')}`,
+          size: 'lg',
+          confirmText: 'Close',
+          body: html,
+          onConfirm: (_b, close) => close(),
+          onReady: (bd) => {
+            bd.querySelectorAll('[data-del-result]').forEach(b => {
+              b.addEventListener('click', () => {
+                deleteResult(parseInt(b.dataset.delResult, 10), bd);
+              });
+            });
+          },
+        });
+      }
+
+      async function deleteResult(id, bd) {
+        if (!confirm('Delete this result? This cannot be undone.')) return;
+
+        const { ok, data } = await api(`/api/admin/results/${id}/safe`, { method: 'DELETE' });
+        if (!ok) { alert(data?.error || 'Delete failed'); return; }
+
+        toast(data.message || 'Result deleted');
+        // Remove the row from the modal
+        const row = bd.querySelector(`[data-result-row="${id}"]`);
+        if (row) row.remove();
+      }
+
+      /* ============================================================
+         SELECT-ALL HANDLERS
+         ============================================================ */
+      function bindGlobalControls() {
+        $('#checkAllDepts').addEventListener('change', (e) => {
+          const eligible = state.departments.filter(d => d.totals.unpublished > 0);
+          if (e.target.checked) eligible.forEach(d => state.selected.add(d.department_id));
+          else                  state.selected.clear();
+
+          document.querySelectorAll('[data-select-dept]').forEach(cb => {
+            const id = parseInt(cb.dataset.selectDept, 10);
+            cb.checked = state.selected.has(id);
+          });
+          updateBulkBar();
+        });
+
+        $('#btnBulkClear').addEventListener('click', () => {
+          state.selected.clear();
+          document.querySelectorAll('[data-select-dept]').forEach(cb => cb.checked = false);
+          updateBulkBar();
+          updateCheckAll();
+        });
+
+        $('#btnBulkPublish').addEventListener('click', () => {
+          const ids = Array.from(state.selected);
+          if (!ids.length) return;
+
+          // Extra safety if publishing 4+ departments at once
+          if (ids.length >= 4) {
+            openModal({
+              title: '⚠️ Bulk publish confirmation',
+              size: 'sm',
+              confirmText: 'Confirm Publish',
+              body: `
+                <p>You're about to publish results for <strong>${ids.length}</strong> department(s) at once.</p>
+                <p style="margin-top:12px;">Type <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-weight:800;">PUBLISH</code> below to confirm:</p>
+                <input class="input" id="confirmText" placeholder="Type PUBLISH" style="margin-top:8px;" />
+              `,
+              onReady: (bd) => {
+                const btn = bd.querySelector('[data-confirm]');
+                const inp = bd.querySelector('#confirmText');
+                const check = () => { btn.disabled = inp.value.trim() !== 'PUBLISH'; };
+                btn.disabled = true;
+                inp.addEventListener('input', check);
+                check();
+              },
+              onConfirm: async (_b, close) => { close(); await doBulkPublish(ids); },
+            });
+          } else {
+            doBulkPublish(ids);
+          }
+        });
+
+        $('#btnRefresh').addEventListener('click', load);
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      document.addEventListener('sa:layout-ready', () => {
+        bindGlobalControls();
+        load();
+      });
     })();
   </script>
 </body>

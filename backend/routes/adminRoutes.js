@@ -9,6 +9,15 @@ const express = require('express');
 const router = express.Router();
 
 const adminController = require('../controllers/adminController');
+const academicController = require('../controllers/academicController');
+const riskController = require('../controllers/riskController');
+const settingsController = require('../controllers/settingsController');
+const auditController = require('../controllers/auditController');
+const reportController = require('../controllers/reportController');
+const importController = require('../controllers/importController');
+const approvalController = require('../controllers/approvalController');
+const submissionController = require('../controllers/submissionController');
+
 const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/role');
 const { validate, body, param } = require('../middleware/validate');
@@ -16,6 +25,10 @@ const { asyncHandler } = require('../middleware/errorHandler');
 
 // All admin routes require auth + role=admin
 router.use(requireAuth, requireRole('admin'));
+
+// Reusable aliases
+const b = body;
+const p = param;
 
 /* ============================================================
    DASHBOARD
@@ -28,47 +41,47 @@ router.get('/dashboard', asyncHandler(adminController.getDashboard));
 router.get('/users', asyncHandler(adminController.listUsers));
 
 router.get('/users/:id',
-  param('id').isInt({ min: 1 }),
+  p('id').isInt({ min: 1 }),
   validate,
   asyncHandler(adminController.getUser)
 );
 
 router.post('/users',
-  body('full_name').trim().isLength({ min: 2, max: 120 }),
-  body('email').trim().isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
-  body('role').isIn(['admin', 'hod', 'lecturer', 'student']),
-  body('phone').optional({ nullable: true }).trim().isLength({ min: 7, max: 20 }),
+  b('full_name').trim().isLength({ min: 2, max: 120 }),
+  b('email').trim().isEmail().normalizeEmail(),
+  b('password').isLength({ min: 6 }),
+  b('role').isIn(['admin', 'hod', 'lecturer', 'student']),
+  b('phone').optional({ nullable: true }).trim().isLength({ min: 7, max: 20 }),
   validate,
   asyncHandler(adminController.createUser)
 );
 
 router.put('/users/:id',
-  param('id').isInt({ min: 1 }),
-  body('full_name').optional().trim().isLength({ min: 2, max: 120 }),
-  body('email').optional().trim().isEmail().normalizeEmail(),
-  body('role').optional().isIn(['admin', 'hod', 'lecturer', 'student']),
-  body('phone').optional({ nullable: true }).trim().isLength({ min: 7, max: 20 }),
-  body('is_active').optional().isBoolean(),
+  p('id').isInt({ min: 1 }),
+  b('full_name').optional().trim().isLength({ min: 2, max: 120 }),
+  b('email').optional().trim().isEmail().normalizeEmail(),
+  b('role').optional().isIn(['admin', 'hod', 'lecturer', 'student']),
+  b('phone').optional({ nullable: true }).trim().isLength({ min: 7, max: 20 }),
+  b('is_active').optional().isBoolean(),
   validate,
   asyncHandler(adminController.updateUser)
 );
 
 router.post('/users/:id/toggle-active',
-  param('id').isInt({ min: 1 }),
+  p('id').isInt({ min: 1 }),
   validate,
   asyncHandler(adminController.toggleUserActive)
 );
 
 router.post('/users/:id/reset-password',
-  param('id').isInt({ min: 1 }),
-  body('new_password').isLength({ min: 6 }),
+  p('id').isInt({ min: 1 }),
+  b('new_password').isLength({ min: 6 }),
   validate,
   asyncHandler(adminController.resetUserPassword)
 );
 
 router.delete('/users/:id',
-  param('id').isInt({ min: 1 }),
+  p('id').isInt({ min: 1 }),
   validate,
   asyncHandler(adminController.deleteUser)
 );
@@ -78,37 +91,51 @@ router.delete('/users/:id',
    ============================================================ */
 router.get('/roles', asyncHandler(adminController.listRoles));
 
-const academicController = require('../controllers/academicController');
-const { body: b, param: p } = require('express-validator');
-
-/* ============ DEPARTMENTS ============ */
+/* ============================================================
+   DEPARTMENTS
+   ============================================================ */
 router.get('/departments', asyncHandler(academicController.listDepartments));
 router.get('/departments/hod-candidates', asyncHandler(academicController.listHodCandidates));
 router.get('/departments/:id', p('id').isInt(), validate, asyncHandler(academicController.getDepartment));
+
 router.post('/departments',
   b('name').trim().isLength({ min: 2, max: 120 }),
   b('code').optional({ nullable: true }).trim().isLength({ max: 10 }),
   b('hod_id').optional({ nullable: true }).isInt(),
-  validate, asyncHandler(academicController.createDepartment)
+  validate,
+  asyncHandler(academicController.createDepartment)
 );
+
 router.put('/departments/:id',
   p('id').isInt(), validate,
   asyncHandler(academicController.updateDepartment)
 );
-router.delete('/departments/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteDepartment));
 
-/* ============ PROGRAMMES ============ */
+router.delete('/departments/:id',
+  p('id').isInt(), validate,
+  asyncHandler(academicController.deleteDepartment)
+);
+
+/* ============================================================
+   PROGRAMMES
+   ============================================================ */
 router.get('/programmes', asyncHandler(academicController.listProgrammes));
+
 router.post('/programmes',
   b('name').trim().isLength({ min: 2, max: 120 }),
   b('department_id').isInt(),
-  validate, asyncHandler(academicController.createProgramme)
+  validate,
+  asyncHandler(academicController.createProgramme)
 );
+
 router.put('/programmes/:id', p('id').isInt(), validate, asyncHandler(academicController.updateProgramme));
 router.delete('/programmes/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteProgramme));
 
-/* ============ STUDENTS ============ */
+/* ============================================================
+   STUDENTS
+   ============================================================ */
 router.get('/students', asyncHandler(academicController.listStudents));
+
 router.post('/students',
   b('full_name').trim().isLength({ min: 2, max: 120 }),
   b('email').trim().isEmail().normalizeEmail(),
@@ -117,26 +144,36 @@ router.post('/students',
   b('department_id').isInt(),
   b('programme_id').isInt(),
   b('level').isInt({ min: 100, max: 700 }),
-  validate, asyncHandler(academicController.createStudent)
+  validate,
+  asyncHandler(academicController.createStudent)
 );
+
 router.put('/students/:id', p('id').isInt(), validate, asyncHandler(academicController.updateStudent));
 router.delete('/students/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteStudent));
 
-/* ============ LECTURERS ============ */
+/* ============================================================
+   LECTURERS
+   ============================================================ */
 router.get('/lecturers', asyncHandler(academicController.listLecturers));
+
 router.post('/lecturers',
   b('full_name').trim().isLength({ min: 2, max: 120 }),
   b('email').trim().isEmail().normalizeEmail(),
   b('password').isLength({ min: 6 }),
   b('staff_id').trim().notEmpty(),
   b('department_id').isInt(),
-  validate, asyncHandler(academicController.createLecturer)
+  validate,
+  asyncHandler(academicController.createLecturer)
 );
+
 router.put('/lecturers/:id', p('id').isInt(), validate, asyncHandler(academicController.updateLecturer));
 router.delete('/lecturers/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteLecturer));
 
-/* ============ COURSES ============ */
+/* ============================================================
+   COURSES
+   ============================================================ */
 router.get('/courses', asyncHandler(academicController.listCourses));
+
 router.post('/courses',
   b('code').trim().notEmpty(),
   b('title').trim().notEmpty(),
@@ -144,41 +181,59 @@ router.post('/courses',
   b('department_id').isInt(),
   b('level').isInt({ min: 100, max: 700 }),
   b('semester_name').isIn(['First', 'Second', 'Summer']),
-  validate, asyncHandler(academicController.createCourse)
+  validate,
+  asyncHandler(academicController.createCourse)
 );
+
 router.put('/courses/:id', p('id').isInt(), validate, asyncHandler(academicController.updateCourse));
 router.delete('/courses/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteCourse));
 
-/* ============ SESSIONS ============ */
+/* ============================================================
+   SESSIONS
+   ============================================================ */
 router.get('/sessions', asyncHandler(academicController.listSessions));
 router.post('/sessions', b('name').trim().notEmpty(), validate, asyncHandler(academicController.createSession));
 router.put('/sessions/:id', p('id').isInt(), validate, asyncHandler(academicController.updateSession));
 router.delete('/sessions/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteSession));
 
-/* ============ SEMESTERS ============ */
+/* ============================================================
+   SEMESTERS
+   ============================================================ */
 router.get('/semesters', asyncHandler(academicController.listSemesters));
+
 router.post('/semesters',
   b('session_id').isInt(),
   b('name').isIn(['First', 'Second', 'Summer']),
-  validate, asyncHandler(academicController.createSemester)
+  validate,
+  asyncHandler(academicController.createSemester)
 );
+
 router.put('/semesters/:id', p('id').isInt(), validate, asyncHandler(academicController.updateSemester));
 router.delete('/semesters/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteSemester));
 
-/* ============ REGISTRATIONS ============ */
-/* ============ REGISTRATIONS ============ */
+/* ============================================================
+   REGISTRATIONS
+   ============================================================ */
 router.get('/registrations', asyncHandler(adminController.listRegistrationsEnhanced));
+
 router.post('/registrations/:id/approve',
   p('id').isInt(), validate,
   asyncHandler(adminController.approveRegistration)
 );
+
 router.post('/registrations/:id/drop',
   p('id').isInt(), validate,
   asyncHandler(adminController.dropRegistration)
 );
-router.delete('/registrations/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteRegistration));
 
-/* ============ FEE PAYMENT ============ */
+router.delete('/registrations/:id',
+  p('id').isInt(), validate,
+  asyncHandler(academicController.deleteRegistration)
+);
+
+/* ============================================================
+   FEE PAYMENT
+   ============================================================ */
 router.post('/students/:id/mark-fees-paid',
   p('id').isInt(),
   b('amount').optional().isNumeric(),
@@ -186,33 +241,51 @@ router.post('/students/:id/mark-fees-paid',
   validate,
   asyncHandler(adminController.markFeesPaid)
 );
+
 router.post('/students/:id/mark-fees-unpaid',
   p('id').isInt(), validate,
   asyncHandler(adminController.markFeesUnpaid)
 );
 
-/* ============ ATTENDANCE ============ */
+/* ============================================================
+   ATTENDANCE
+   ============================================================ */
 router.get('/attendance', asyncHandler(academicController.listAttendance));
 
-/* ============ RESULTS ============ */
+/* ============================================================
+   RESULTS (list / edit / delete)
+   ============================================================ */
 router.get('/results', asyncHandler(academicController.listResults));
 router.put('/results/:id', p('id').isInt(), validate, asyncHandler(academicController.updateResult));
 router.post('/results/:id/publish', p('id').isInt(), validate, asyncHandler(academicController.publishResult));
 router.delete('/results/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteResult));
 
-/* ============ RISK ============ */
-const riskController = require('../controllers/riskController');
+// Safe delete — respects publish policy
+router.delete('/results/:id/safe',
+  p('id').isInt(), validate,
+  asyncHandler(adminController.deleteResultSafely)
+);
+
+/* ============================================================
+   RISK
+   ============================================================ */
 router.get('/risk', asyncHandler(riskController.listRisk));
 router.get('/risk/:id', p('id').isInt(), validate, asyncHandler(riskController.getRisk));
 router.get('/risk/student/:studentId/history',
   p('studentId').isInt(), validate,
-  asyncHandler(riskController.getStudentRiskHistory));
+  asyncHandler(riskController.getStudentRiskHistory)
+);
 
-/* ============ INTERVENTIONS ============ */
+router.post('/risk/recompute', asyncHandler(riskController.recompute));
+
+/* ============================================================
+   INTERVENTIONS
+   ============================================================ */
 router.get('/interventions', asyncHandler(riskController.listInterventions));
 router.get('/interventions/staff', asyncHandler(riskController.listStaff));
 router.get('/interventions/students', asyncHandler(riskController.listStudentsSelect));
 router.get('/interventions/:id', p('id').isInt(), validate, asyncHandler(riskController.getIntervention));
+
 router.post('/interventions',
   b('student_id').isInt(),
   b('type').isIn([
@@ -221,35 +294,43 @@ router.post('/interventions',
   ]),
   b('title').trim().isLength({ min: 3, max: 150 }),
   b('priority').optional().isIn(['low','medium','high','critical']),
-  validate, asyncHandler(riskController.createIntervention)
+  validate,
+  asyncHandler(riskController.createIntervention)
 );
+
 router.put('/interventions/:id', p('id').isInt(), validate, asyncHandler(riskController.updateIntervention));
 router.delete('/interventions/:id', p('id').isInt(), validate, asyncHandler(riskController.deleteIntervention));
 
-/* ============ SETTINGS ============ */
-const settingsController = require('../controllers/settingsController');
-const auditController = require('../controllers/auditController');
-const reportController = require('../controllers/reportController');
+router.post('/interventions/auto-create', asyncHandler(riskController.autoIntervene));
 
+/* ============================================================
+   SETTINGS
+   ============================================================ */
 router.get('/settings', asyncHandler(settingsController.list));
 router.post('/settings', b('key').trim().notEmpty(), validate, asyncHandler(settingsController.update));
 router.post('/settings/bulk', validate, asyncHandler(settingsController.bulkUpdate));
 router.delete('/settings/:key', asyncHandler(settingsController.remove));
 
-/* ============ AUDIT LOGS ============ */
+/* ============================================================
+   AUDIT LOGS
+   ============================================================ */
 router.get('/audit-logs', asyncHandler(auditController.list));
 router.get('/audit-logs/modules', asyncHandler(auditController.listModules));
 
-/* ============ REPORTS ============ */
-router.get('/reports/student/:studentId', p('studentId').isInt(), validate, asyncHandler(reportController.studentReport));
+/* ============================================================
+   REPORTS
+   ============================================================ */
+router.get('/reports/student/:studentId',
+  p('studentId').isInt(), validate,
+  asyncHandler(reportController.studentReport)
+);
 router.get('/reports/attendance', asyncHandler(reportController.attendanceReport));
 router.get('/reports/risk', asyncHandler(reportController.riskReport));
 router.get('/reports/performance', asyncHandler(reportController.performanceReport));
 
-router.post('/risk/recompute', asyncHandler(riskController.recompute));
-
-router.post('/interventions/auto-create', asyncHandler(riskController.autoIntervene));
-
+/* ============================================================
+   REPORT EXPORT (CSV / PDF / Excel)
+   ============================================================ */
 const { toCSV } = require('../utils/csvExporter');
 const { generateReport } = require('../utils/pdfExporter');
 const { generateWorkbook } = require('../utils/excelExporter');
@@ -262,8 +343,6 @@ router.get('/reports/export/:type', async (req, res, next) => {
     let title, columns, rows;
 
     if (type === 'attendance') {
-      const data = await reportController.attendanceReport(req, { json: () => {} }, () => {});
-      // simpler: re-query
       const r = await db.query(`
         SELECT u.full_name AS student, s.matric_no AS matric, c.code AS course, c.title,
                COUNT(*)::int AS total,
@@ -351,19 +430,22 @@ router.get('/reports/export/:type', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* ============ BULK IMPORT ============ */
-const importController = require('../controllers/importController');
+/* ============================================================
+   BULK IMPORT
+   ============================================================ */
 router.get('/students/import/template', asyncHandler(importController.downloadTemplate));
 router.post('/students/import', asyncHandler(importController.importStudents));
 
-/* ============ USER APPROVALS ============ */
-const approvalController = require('../controllers/approvalController');
+/* ============================================================
+   USER APPROVALS
+   ============================================================ */
 router.get('/pending-users', asyncHandler(approvalController.listPending));
 router.post('/pending-users/:id/approve', p('id').isInt(), validate, asyncHandler(approvalController.approve));
 router.post('/pending-users/:id/reject', p('id').isInt(), validate, asyncHandler(approvalController.reject));
 
-const submissionController = require('../controllers/submissionController');
-
+/* ============================================================
+   HOD SUBMISSIONS
+   ============================================================ */
 router.get('/submissions', asyncHandler(submissionController.listAllSubmissions));
 router.post('/submissions/:id/approve', p('id').isInt(), validate, asyncHandler(submissionController.approveSubmission));
 router.post('/submissions/:id/reject',
@@ -373,21 +455,55 @@ router.post('/submissions/:id/reject',
   asyncHandler(submissionController.rejectSubmission)
 );
 
+/* ============================================================
+   OWN PROFILE
+   ============================================================ */
 router.put('/profile', asyncHandler(adminController.updateOwnProfile));
 router.post('/change-password', asyncHandler(adminController.changeOwnPassword));
+router.post('/profile/photo', asyncHandler(adminController.uploadOwnPhoto));
+router.delete('/profile/photo', asyncHandler(adminController.removeOwnPhoto));
 
-/* ============ PROFILE PHOTO ============ */
-router.post('/profile/photo',
-  asyncHandler(adminController.uploadOwnPhoto)
+/* ============================================================
+   PUBLISH RESULTS (grouped by department)
+   ============================================================ */
+
+// Grouped listing — one row per department
+router.get('/publish/result-submissions',
+  asyncHandler(adminController.listPublishableResultsGrouped)
 );
-router.delete('/profile/photo',
-  asyncHandler(adminController.removeOwnPhoto)
+
+// Publish all approved results in one department
+router.post('/publish/department/:departmentId',
+  p('departmentId').isInt(),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.publishDepartment)
+);
+
+// Publish across multiple departments at once
+router.post('/publish/departments-bulk',
+  b('department_ids').isArray({ min: 1 }),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.publishDepartmentsBulk)
+);
+
+// Unpublish all results in one department
+router.post('/unpublish/department/:departmentId',
+  p('departmentId').isInt(),
+  b('session_id').isInt(),
+  b('semester_id').isInt(),
+  validate,
+  asyncHandler(adminController.unpublishDepartment)
 );
 
 /* ============================================================
-   PUBLISH RESULTS
+   LEGACY PUBLISH ENDPOINTS (kept for compatibility)
    ============================================================ */
-router.get('/publish/result-submissions', asyncHandler(adminController.listPublishableResults));
+router.get('/publish/result-submissions-flat', asyncHandler(adminController.listPublishableResults));
+
 router.post('/publish/:courseId',
   p('courseId').isInt(),
   b('session_id').isInt(),
@@ -395,6 +511,7 @@ router.post('/publish/:courseId',
   validate,
   asyncHandler(adminController.publishResults)
 );
+
 router.post('/unpublish/:courseId',
   p('courseId').isInt(),
   b('session_id').isInt(),
@@ -410,5 +527,10 @@ router.post('/publish-bulk',
   validate,
   asyncHandler(adminController.publishResultsBulk)
 );
+
+/* ============================================================
+   QUICK DB REFERENCE
+   ============================================================ */
+const db = require('../config/db');
 
 module.exports = router;
