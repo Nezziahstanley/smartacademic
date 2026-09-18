@@ -15,58 +15,43 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
           <div>
             <h1>Students</h1>
-            <p>All enrolled students across departments and programmes.</p>
+            <p>All enrolled students, grouped by department.</p>
           </div>
           <div class="page-actions">
-            <button class="btn btn-ghost" id="btnImport">📤 Import CSV</button>
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
             <button class="btn btn-primary" id="btnNew">+ New Student</button>
           </div>
         </div>
 
         <div class="filters">
-          <div class="search"><input type="search" id="searchInput" placeholder="Search by name, matric, or email..." /></div>
-          <select class="select" id="deptFilter" style="max-width:220px;"><option value="">All departments</option></select>
-          <select class="select" id="levelFilter" style="max-width:140px;">
-            <option value="">All levels</option>
-            <option value="100">100</option><option value="200">200</option>
-            <option value="300">300</option><option value="400">400</option><option value="500">500</option>
-          </select>
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by name, matric, or email..." />
+          </div>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Matric</th>
-                <th>Department</th>
-                <th>Programme</th>
-                <th>Level</th>
-                <th style="text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"><tr><td colspan="6"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div id="accordionHost">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
 
-        <div class="pagination" id="pagination">
-          <span id="paginationInfo">—</span>
-          <div class="pages" id="paginationButtons"></div>
-        </div>
       </main>
     </div>
   </div>
-<!-- Hidden file input for CSV upload -->
+
   <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
-  
   <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script src="/js/admin/students.js"></script>
+  <script src="/js/admin/accordion.js"></script>
+  <script src="/js/admin/students-grouped.js"></script>
 </body>
 </html>

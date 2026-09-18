@@ -11,7 +11,6 @@
   <link rel="stylesheet" href="/css/dashboard.css" />
   <script src="/js/lib/qrcode.min.js"></script>
   <style>
-    /* ---- Grid of printable cards ---- */
     .cards-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -19,7 +18,8 @@
     }
 
     .id-card {
-      width: 340px;
+      width: 100%;
+      max-width: 340px;
       height: 214px;
       border-radius: 14px;
       background: linear-gradient(135deg, #166534 0%, #ca8a04 100%);
@@ -42,7 +42,6 @@
       background: rgba(255,255,255,0.06);
       bottom: -70px; left: -40px; pointer-events: none;
     }
-
     .id-top { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12px; position: relative; z-index: 2; }
     .id-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: rgba(255,255,255,0.2); font-size: 12px; }
 
@@ -73,22 +72,29 @@
       box-shadow: 0 3px 8px rgba(0,0,0,0.15); flex-shrink: 0;
     }
     .qr-box canvas, .qr-box img, .qr-box svg { width: 100%; height: 100%; display: block; border-radius: 3px; }
-
     .qr-meta { display: flex; flex-direction: column; gap: 3px; margin-bottom: 3px; flex: 1; min-width: 0; }
     .qr-meta .scan-hint { font-size: 7.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.9; }
     .qr-meta .matric { font-size: 9px; font-family: monospace; font-weight: 700; opacity: 0.95; word-break: break-all; }
-
     .id-valid { font-size: 8px; text-align: right; opacity: 0.85; flex-shrink: 0; }
     .id-valid strong { display: block; font-size: 9.5px; font-family: monospace; margin-top: 1px; }
 
-    /* ---------- Print ---------- */
+    .id-card-skeleton {
+      width: 100%; max-width: 340px; height: 214px; border-radius: 14px;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: sk 1.4s ease-in-out infinite;
+    }
+    @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* Print */
     @media print {
       @page { size: A4; margin: 8mm; }
       body * { visibility: hidden; }
-      .cards-grid, .cards-grid * { visibility: visible; }
+      .print-target, .print-target * { visibility: visible; }
       body { background: #fff !important; }
-      .cards-grid {
+      .print-target {
         position: absolute; top: 0; left: 0; right: 0;
+        display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 6mm;
       }
@@ -100,15 +106,6 @@
       }
       .no-print { display: none !important; }
     }
-
-    /* Skeleton */
-    .id-card-skeleton {
-      width: 340px; height: 214px; border-radius: 14px;
-      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-      background-size: 200% 100%;
-      animation: sk 1.4s ease-in-out infinite;
-    }
-    @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   </style>
 </head>
 <body>
@@ -122,168 +119,175 @@
         <div class="page-header no-print">
           <div>
             <h1>Batch ID Cards</h1>
-            <p>Generate and print student ID cards by department, programme, or level.</p>
+            <p>Students grouped by department. Expand to see cards, then print.</p>
           </div>
           <div class="page-actions">
-            <button class="btn btn-ghost" id="btnReload">↻ Reload</button>
-            <button class="btn btn-primary" id="btnPrint">🖨️ Print All</button>
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
+            <button class="btn btn-primary" id="btnPrintAll">🖨️ Print All</button>
           </div>
         </div>
 
-        <div class="filters no-print">
-          <select class="select" id="deptFilter" style="max-width: 240px;">
-            <option value="">All departments</option>
-          </select>
-          <select class="select" id="programmeFilter" style="max-width: 260px;">
-            <option value="">All programmes</option>
-          </select>
-          <select class="select" id="levelFilter" style="max-width: 160px;">
-            <option value="">All levels</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="300">300</option>
-            <option value="400">400</option>
-            <option value="500">500</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
-          <span id="counter" style="margin-left:auto;font-size:13px;color:var(--ink-3);font-weight:600;"></span>
+        <div id="accordionHost" class="no-print">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
 
-        <div class="cards-grid" id="cardsGrid">
-          <div class="id-card-skeleton"></div>
-          <div class="id-card-skeleton"></div>
-          <div class="id-card-skeleton"></div>
-          <div class="id-card-skeleton"></div>
-        </div>
+        <!-- This div is what actually gets printed (populated on Print) -->
+        <div id="printTarget" class="print-target" style="display:none;"></div>
 
       </main>
     </div>
   </div>
 
+  <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
+  <script src="/js/admin/accordion.js"></script>
   <script>
     'use strict';
     (function () {
       const { $, api, esc, toast } = window.SACrud;
+      const { mount } = window.SAAccordion;
 
       const state = {
-        department_id: '',
-        programme_id: '',
-        level: '',
-        items: [],
+        departments: [],
+        students: [],
       };
 
       /* ============================================================
-         LOOKUPS
-         ============================================================ */
-      async function loadDepartments() {
-        const { ok, data } = await api('/api/admin/departments');
-        if (!ok) return;
-        $('#deptFilter').innerHTML = '<option value="">All departments</option>' +
-          data.data.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
-      }
-
-      async function loadProgrammes(deptId) {
-        if (!deptId) { $('#programmeFilter').innerHTML = '<option value="">All programmes</option>'; return; }
-        const { ok, data } = await api('/api/admin/programmes?department_id=' + deptId);
-        if (!ok) return;
-        $('#programmeFilter').innerHTML = '<option value="">All programmes</option>' +
-          data.data.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-      }
-
-      /* ============================================================
-         LOAD STUDENTS
+         LOAD
          ============================================================ */
       async function load() {
-        const grid = $('#cardsGrid');
-        grid.innerHTML = Array(4).fill('<div class="id-card-skeleton"></div>').join('');
+        const host = $('#accordionHost');
+        host.innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:12px;"></div><div class="skeleton" style="height:80px;"></div>';
 
-        const p = new URLSearchParams({ limit: 500 });
-        if (state.department_id) p.set('department_id', state.department_id);
-        if (state.programme_id) p.set('programme_id', state.programme_id);
-        if (state.level) p.set('level', state.level);
+        const [deptRes, studentsRes] = await Promise.all([
+          api('/api/admin/departments/overview'),
+          api('/api/admin/students?limit=1000'),
+        ]);
 
-        const { ok, data } = await api('/api/admin/students?' + p.toString());
-        if (!ok) {
-          grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load students</h3></div>';
+        if (!deptRes.ok || !studentsRes.ok) {
+          host.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load</h3></div>';
           return;
         }
 
-        state.items = data.data.items || [];
-        $('#counter').textContent = `${state.items.length} student(s)`;
+        state.departments = deptRes.data.data;
+        state.students = studentsRes.data.data.items || [];
 
-        if (!state.items.length) {
-          grid.innerHTML = `
-            <div class="empty" style="grid-column:1/-1;padding:40px;">
-              <div class="empty-icon">🎓</div>
-              <h3>No students match your filters</h3>
-              <p>Adjust the filters above and try again.</p>
-            </div>`;
-          return;
+        const byDept = new Map();
+        for (const s of state.students) {
+          if (!byDept.has(s.department_id)) byDept.set(s.department_id, []);
+          byDept.get(s.department_id).push(s);
         }
 
-        render();
+        const acc = mount(host, { pageKey: 'admin_id_cards' });
+
+        const items = state.departments.map(d => {
+          const list = byDept.get(d.id) || [];
+          return {
+            id: d.id,
+            name: d.name,
+            code: d.code,
+            meta: { students: d.student_count },
+            actionsHtml: `
+              <button class="btn btn-primary btn-sm" data-print-dept="${d.id}">🖨️ Print</button>
+            `,
+            renderBody: () => renderCardsGrid(list),
+            onBodyReady: (bd) => {
+              // Render QR codes for this department's cards
+              renderQrCodes(bd);
+            },
+          };
+        });
+
+        acc.render(items);
+
+        document.querySelectorAll('[data-print-dept]').forEach(b =>
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            printDepartment(parseInt(b.dataset.printDept, 10));
+          }));
       }
 
       /* ============================================================
-         RENDER CARDS
+         RENDER CARDS GRID
          ============================================================ */
-      function render() {
-        const grid = $('#cardsGrid');
-
-        grid.innerHTML = state.items.map(s => {
-          const initials = (s.full_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-          const photoStyle = s.photo_url
-            ? `background-image:url('${s.photo_url}');background-size:cover;background-position:center;color:transparent;`
-            : '';
+      function renderCardsGrid(students) {
+        if (!students.length) {
           return `
-            <div class="id-card" data-matric="${esc(s.matric_no)}">
-              <div class="id-top">
-                <span class="id-mark">S</span>
-                <span>SMARTACADEMIC</span>
-              </div>
-              <div class="id-body">
-                <div class="id-photo" style="${photoStyle}">${s.photo_url ? '' : initials}</div>
-                <div class="id-info">
-                  <div class="id-name">${esc(s.full_name)}</div>
-                  <div class="id-role">Student</div>
-                  <div class="id-detail">
-                    ${esc(s.department_name || '')}<br>
-                    ${esc(s.programme_name || '')} · Level ${s.level}
-                  </div>
-                </div>
-              </div>
-              <div class="id-footer">
-                <div class="qr-box"><div class="qr-target" data-url="${location.origin}/verify.html?matric=${encodeURIComponent(s.matric_no)}"></div></div>
-                <div class="qr-meta">
-                  <div class="scan-hint">📱 Scan to verify</div>
-                  <div class="matric">${esc(s.matric_no)}</div>
-                </div>
-                <div class="id-valid">
-                  <span>Valid From</span>
-                  <strong>${new Date().toLocaleDateString()}</strong>
-                </div>
-              </div>
+            <div class="empty" style="padding:40px;">
+              <div class="empty-icon">🎓</div>
+              <h3>No students in this department</h3>
             </div>`;
-        }).join('');
+        }
 
-        // Render QR codes
+        return `
+          <div style="padding:18px;">
+            <div class="cards-grid" data-grid>
+              ${students.map(s => renderCard(s)).join('')}
+            </div>
+          </div>`;
+      }
+
+      function renderCard(s) {
+        const initials = (s.full_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+        const photoStyle = s.photo_url
+          ? `background-image:url('${s.photo_url}');background-size:cover;background-position:center;color:transparent;`
+          : '';
+        const verifyUrl = `${location.origin}/verify.html?matric=${encodeURIComponent(s.matric_no)}`;
+
+        return `
+          <div class="id-card">
+            <div class="id-top">
+              <span class="id-mark">S</span>
+              <span>SMARTACADEMIC</span>
+            </div>
+            <div class="id-body">
+              <div class="id-photo" style="${photoStyle}">${s.photo_url ? '' : initials}</div>
+              <div class="id-info">
+                <div class="id-name">${esc(s.full_name)}</div>
+                <div class="id-role">Student</div>
+                <div class="id-detail">
+                  ${esc(s.department_name || '')}<br>
+                  ${esc(s.programme_name || '')} · Level ${s.level}
+                </div>
+              </div>
+            </div>
+            <div class="id-footer">
+              <div class="qr-box"><div class="qr-target" data-url="${esc(verifyUrl)}"></div></div>
+              <div class="qr-meta">
+                <div class="scan-hint">📱 Scan to verify</div>
+                <div class="matric">${esc(s.matric_no)}</div>
+              </div>
+              <div class="id-valid">
+                <span>Valid From</span>
+                <strong>${new Date().toLocaleDateString()}</strong>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function renderQrCodes(container) {
         if (typeof QRCode === 'undefined') {
-          console.warn('[id-cards-batch] QRCode library not loaded');
+          console.warn('[id-cards] QRCode library not loaded');
           return;
         }
-        grid.querySelectorAll('.qr-target').forEach(el => {
+        container.querySelectorAll('.qr-target').forEach(el => {
+          const url = el.dataset.url;
+          if (!url || el.dataset.rendered) return;
           try {
             new QRCode(el, {
-              text: el.dataset.url,
+              text: url,
               width: 120,
               height: 120,
               colorDark: '#000000',
               colorLight: '#ffffff',
               correctLevel: QRCode.CorrectLevel.H,
             });
+            el.dataset.rendered = '1';
             const img = el.querySelector('img, canvas');
             if (img) {
               img.style.width = '100%';
@@ -291,59 +295,77 @@
               img.style.display = 'block';
             }
           } catch (err) {
-            console.warn('[qr]', err);
+            console.warn('[id-cards qr]', err);
           }
         });
       }
 
       /* ============================================================
-         BIND
+         PRINT
          ============================================================ */
-      function bind() {
-        $('#deptFilter').addEventListener('change', async (e) => {
-          state.department_id = e.target.value;
-          state.programme_id = '';
-          await loadProgrammes(state.department_id);
-          load();
-        });
+      async function printDepartment(departmentId) {
+        const dept = state.departments.find(d => d.id === departmentId);
+        const students = state.students.filter(s => s.department_id === departmentId);
+        if (!students.length) { toast('No students to print', 'error'); return; }
+        await printCards(students, dept ? dept.name : '');
+      }
 
-        $('#programmeFilter').addEventListener('change', (e) => {
-          state.programme_id = e.target.value;
-          load();
-        });
+      async function printAll() {
+        if (!state.students.length) { toast('No students to print', 'error'); return; }
+        await printCards(state.students, 'All Departments');
+      }
 
-        $('#levelFilter').addEventListener('change', (e) => {
-          state.level = e.target.value;
-          load();
-        });
+      async function printCards(students, label) {
+        toast(`⏳ Preparing ${students.length} card(s)...`);
 
-        $('#btnReset').addEventListener('click', () => {
-          state.department_id = '';
-          state.programme_id = '';
-          state.level = '';
-          $('#deptFilter').value = '';
-          $('#programmeFilter').innerHTML = '<option value="">All programmes</option>';
-          $('#levelFilter').value = '';
-          load();
-        });
+        const target = $('#printTarget');
+        target.innerHTML = students.map(renderCard).join('');
+        renderQrCodes(target);
 
-        $('#btnReload').addEventListener('click', load);
-        $('#btnPrint').addEventListener('click', () => window.print());
+        // Give the QR library a moment to finish rendering into canvas/img
+        await new Promise(r => setTimeout(r, 400));
+
+        // Toggle print mode
+        document.body.classList.add('print-mode');
+        target.style.display = 'grid';
+
+        // Try/catch so we always restore the UI
+        try {
+          window.print();
+        } finally {
+          setTimeout(() => {
+            target.style.display = 'none';
+            target.innerHTML = '';
+            document.body.classList.remove('print-mode');
+          }, 300);
+        }
       }
 
       /* ============================================================
-         BOOT
+         GLOBAL CONTROLS
          ============================================================ */
-      async function boot() {
-        if (window.__batchIdBooted) return;
-        window.__batchIdBooted = true;
-        await loadDepartments();
+      function bind() {
+        $('#btnPrintAll').addEventListener('click', printAll);
+        $('#btnExpandAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card').forEach(c => {
+            if (!c.classList.contains('open')) c.querySelector('.dept-head')?.click();
+          });
+        });
+        $('#btnCollapseAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card.open').forEach(c =>
+            c.querySelector('.dept-head')?.click());
+        });
+      }
+
+      function boot() {
+        if (window.__adminIdCardsBooted) return;
+        window.__adminIdCardsBooted = true;
         bind();
         load();
       }
 
       document.addEventListener('sa:layout-ready', boot);
-      setTimeout(boot, 1000);
+      setTimeout(boot, 1500);
     })();
   </script>
 </body>

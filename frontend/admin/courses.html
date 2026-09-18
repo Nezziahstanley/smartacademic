@@ -15,31 +15,29 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
-          <div><h1>Courses</h1><p>Course catalogue with assignments to lecturers.</p></div>
-          <div class="page-actions"><button class="btn btn-primary" id="btnNew">+ New Course</button></div>
+          <div>
+            <h1>Courses</h1>
+            <p>Course catalogue grouped by department.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
+            <button class="btn btn-primary" id="btnNew">+ New Course</button>
+          </div>
         </div>
 
         <div class="filters">
           <div class="search"><input type="search" id="searchInput" placeholder="Search by code or title..." /></div>
-          <select class="select" id="deptFilter" style="max-width:220px;"><option value="">All departments</option></select>
-          <select class="select" id="levelFilter" style="max-width:140px;">
-            <option value="">All levels</option>
-            <option value="100">100</option><option value="200">200</option>
-            <option value="300">300</option><option value="400">400</option><option value="500">500</option>
-          </select>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr>
-              <th>Code</th><th>Title</th><th>Units</th><th>Level</th><th>Semester</th>
-              <th>Lecturer</th><th>Dept</th><th style="text-align:right;">Actions</th>
-            </tr></thead>
-            <tbody id="tbody"><tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div id="accordionHost">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
+
       </main>
     </div>
   </div>
@@ -47,6 +45,7 @@
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script src="/js/admin/courses.js"></script>
+  <script src="/js/admin/accordion.js"></script>
+  <script src="/js/admin/courses-grouped.js"></script>
 </body>
 </html>

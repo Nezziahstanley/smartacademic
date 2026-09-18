@@ -15,37 +15,39 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
-          <div><h1>Lecturers</h1><p>Manage teaching staff and their course assignments.</p></div>
-          <div class="page-actions"><button class="btn btn-primary" id="btnNew">+ New Lecturer</button></div>
+          <div>
+            <h1>Lecturers</h1>
+            <p>Teaching staff, grouped by department.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
+            <button class="btn btn-primary" id="btnNew">+ New Lecturer</button>
+          </div>
         </div>
 
         <div class="filters">
           <div class="search"><input type="search" id="searchInput" placeholder="Search by name or staff ID..." /></div>
-          <select class="select" id="deptFilter" style="max-width:220px;"><option value="">All departments</option></select>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr>
-              <th>Lecturer</th><th>Staff ID</th><th>Department</th><th>Courses</th><th style="text-align:right;">Actions</th>
-            </tr></thead>
-            <tbody id="tbody"><tr><td colspan="5"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div id="accordionHost">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
 
-        <div class="pagination" id="pagination">
-          <span id="paginationInfo">—</span>
-          <div class="pages" id="paginationButtons"></div>
-        </div>
       </main>
     </div>
   </div>
+
   <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script src="/js/admin/lecturers.js"></script>
+  <script src="/js/admin/accordion.js"></script>
+  <script src="/js/admin/lecturers-grouped.js"></script>
 </body>
 </html>

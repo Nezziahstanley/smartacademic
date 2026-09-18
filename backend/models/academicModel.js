@@ -139,19 +139,21 @@ async function listStudents({ departmentId = null, programmeId = null, level = n
     where.push(`(LOWER(u.full_name) LIKE $${params.length} OR LOWER(s.matric_no) LIKE $${params.length} OR LOWER(u.email) LIKE $${params.length})`);
   }
   params.push(limit, offset);
-  const r = await db.query(`
-    SELECT s.id, s.matric_no, s.level, s.admission_year, s.is_active,
-           u.id AS user_id, u.full_name, u.email, u.phone,
-           d.id AS department_id, d.name AS department_name,
-           p.id AS programme_id,  p.name AS programme_name
-      FROM students s
-      JOIN users u       ON u.id = s.user_id
-      JOIN departments d ON d.id = s.department_id
-      JOIN programmes p  ON p.id = s.programme_id
-     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY u.full_name
-     LIMIT $${params.length - 1} OFFSET $${params.length}
-  `, params);
+    const r = await db.query(`
+      SELECT s.id, s.matric_no, s.level, s.admission_year, s.is_active,
+            u.id AS user_id, u.full_name, u.email, u.phone,
+            u.photo_url,
+            d.id AS department_id, d.name AS department_name,
+            d.code AS department_code,
+            p.id AS programme_id,  p.name AS programme_name
+        FROM students s
+        JOIN users u       ON u.id = s.user_id
+        JOIN departments d ON d.id = s.department_id
+        JOIN programmes p  ON p.id = s.programme_id
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY u.full_name
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `, params);
   return r.rows;
 }
 

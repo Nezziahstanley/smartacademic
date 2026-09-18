@@ -1061,6 +1061,70 @@ async function publishResultsBulk(req, res, next) {
 }
 
 /* ============================================================
+   DEPARTMENTS OVERVIEW
+   Returns every department with aggregate counts so pages can
+   render collapsed accordion rows in a single request.
+   ============================================================ */
+async function listDepartmentsOverview(req, res, next) {
+  try {
+    const r = await db.query(`
+      SELECT
+        d.id,
+        d.name,
+        d.code,
+        d.is_active,
+        u.full_name AS hod_name,
+
+        (SELECT COUNT(*)::int
+           FROM students s
+          WHERE s.department_id = d.id
+            AND s.is_active = TRUE)                                  AS student_count,
+
+        (SELECT COUNT(*)::int
+           FROM lecturers l
+          WHERE l.department_id = d.id
+            AND l.is_active = TRUE)                                  AS lecturer_count,
+
+        (SELECT COUNT(*)::int
+           FROM courses c
+          WHERE c.department_id = d.id
+            AND c.is_active = TRUE)                                  AS course_count,
+
+        (SELECT COUNT(*)::int
+           FROM course_registrations cr
+           JOIN students s ON s.id = cr.student_id
+          WHERE s.department_id = d.id
+            AND cr.status = 'registered')                            AS pending_registrations,
+
+        (SELECT COUNT(*)::int
+           FROM results r
+           JOIN courses c ON c.id = r.course_id
+          WHERE c.department_id = d.id
+            AND r.submission_status = 'approved'
+            AND r.is_published = FALSE)                              AS pending_publish,
+
+        (SELECT COUNT(*)::int
+           FROM risk_assessments ra
+           JOIN students s ON s.id = ra.student_id
+          WHERE s.department_id = d.id
+            AND ra.risk_category IN ('ORANGE','RED')
+            AND ra.assessed_at = (
+              SELECT MAX(assessed_at)
+                FROM risk_assessments
+               WHERE student_id = ra.student_id
+            ))                                                       AS high_risk_count
+
+      FROM departments d
+      LEFT JOIN users u ON u.id = d.hod_id
+      WHERE d.is_active = TRUE
+      ORDER BY d.name
+    `);
+
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
    EXPORTS
    ============================================================ */
 module.exports = {
@@ -1093,4 +1157,5 @@ module.exports = {
   publishResults,
   unpublishResults,
   publishResultsBulk,
+  listDepartmentsOverview,
 };

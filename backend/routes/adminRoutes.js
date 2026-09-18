@@ -96,6 +96,7 @@ router.get('/roles', asyncHandler(adminController.listRoles));
    ============================================================ */
 router.get('/departments', asyncHandler(academicController.listDepartments));
 router.get('/departments/hod-candidates', asyncHandler(academicController.listHodCandidates));
+router.get('/departments/overview', asyncHandler(adminController.listDepartmentsOverview));
 router.get('/departments/:id', p('id').isInt(), validate, asyncHandler(academicController.getDepartment));
 
 router.post('/departments',
