@@ -8,39 +8,438 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .dept-toolbar {
+      padding: 10px 20px;
+      background: #fafbfd;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .dept-toolbar .stats {
+      margin-right: auto;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--ink-3);
+    }
+    .dept-toolbar .chip {
+      background: var(--bg-3);
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .result-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 16px 20px;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-summary > div {
+      text-align: center;
+    }
+    .result-summary .k { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+    .result-summary .v { font-size: 20px; font-weight: 800; }
+    @media (max-width: 640px) {
+      .result-summary { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
 </head>
 <body>
+
   <div class="app-shell">
     <div id="sidebarSlot"></div>
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
-          <div><h1>Results</h1><p>View, edit, and publish student results.</p></div>
+          <div>
+            <h1>Results</h1>
+            <p>Student results, grouped by department. Click a course to see students.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
+          </div>
         </div>
 
         <div class="filters">
-          <select class="select" id="courseFilter" style="max-width:280px;"><option value="">All courses</option></select>
-          <div class="search"><input type="search" id="searchInput" placeholder="Search by student or matric..." /></div>
+          <select class="select" id="statusFilter" style="max-width:200px;">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Submitted</option>
+            <option value="approved">Approved</option>
+            <option value="returned">Returned</option>
+          </select>
+          <select class="select" id="publishFilter" style="max-width:200px;">
+            <option value="">All</option>
+            <option value="published">Published only</option>
+            <option value="unpublished">Unpublished only</option>
+          </select>
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by student or course..." />
+          </div>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr>
-              <th>Student</th><th>Course</th><th>CA</th><th>Exam</th><th>Total</th>
-              <th>Grade</th><th>Status</th><th style="text-align:right;">Actions</th>
-            </tr></thead>
-            <tbody id="tbody"><tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div id="accordionHost">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
+
       </main>
     </div>
   </div>
+
   <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script src="/js/admin/results.js"></script>
+  <script src="/js/admin/accordion.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, toast } = window.SACrud;
+      const { mount } = window.SAAccordion;
+
+      const state = {
+        departments: [],
+        results: [],
+        status: '',
+        publish: '',
+        search: '',
+      };
+
+      /* ============================================================
+         LOAD
+         ============================================================ */
+      async function load() {
+        const host = $('#accordionHost');
+        host.innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:12px;"></div><div class="skeleton" style="height:80px;"></div>';
+
+        const [deptRes, courseRes, resultRes] = await Promise.all([
+          api('/api/admin/departments/overview'),
+          api('/api/admin/courses'),
+          api('/api/admin/results?limit=2000'),
+        ]);
+
+        if (!deptRes.ok || !courseRes.ok || !resultRes.ok) {
+          host.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load</h3></div>';
+          return;
+        }
+
+        state.departments = deptRes.data.data;
+        const courseMap = new Map(courseRes.data.data.map(c => [c.id, { dept: c.department_id, code: c.code, title: c.title }]));
+        state.results = resultRes.data.data || [];
+
+        // Group results by course, then by department
+        const byDept = new Map();
+        const deptCourseMap = new Map(); // deptId → Map(courseId → rows[])
+        for (const r of state.results) {
+          const meta = courseMap.get(r.course_id);
+          if (!meta) continue;
+          const deptId = meta.dept;
+          if (!deptCourseMap.has(deptId)) deptCourseMap.set(deptId, new Map());
+          const courseRows = deptCourseMap.get(deptId);
+          if (!courseRows.has(r.course_id)) courseRows.set(r.course_id, []);
+          courseRows.get(r.course_id).push({ ...r, _courseCode: meta.code, _courseTitle: meta.title });
+        }
+
+        const acc = mount(host, { pageKey: 'admin_results' });
+
+        const items = state.departments.map(d => {
+          const courseRows = deptCourseMap.get(d.id) || new Map();
+          const courses = Array.from(courseRows.entries()).map(([courseId, rows]) => ({
+            course_id: courseId,
+            code: rows[0]._courseCode,
+            title: rows[0]._courseTitle,
+            rows,
+          }));
+
+          // Apply filters
+          let filteredCourses = courses;
+          if (state.status) {
+            filteredCourses = filteredCourses.filter(c =>
+              c.rows.some(r => (r.submission_status || 'draft') === state.status));
+          }
+          if (state.publish === 'published') {
+            filteredCourses = filteredCourses.filter(c => c.rows.every(r => r.is_published));
+          } else if (state.publish === 'unpublished') {
+            filteredCourses = filteredCourses.filter(c => c.rows.some(r => !r.is_published));
+          }
+          if (state.search) {
+            const q = state.search.toLowerCase();
+            filteredCourses = filteredCourses.filter(c =>
+              c.code.toLowerCase().includes(q) ||
+              c.title.toLowerCase().includes(q) ||
+              c.rows.some(r =>
+                (r.student_name || '').toLowerCase().includes(q) ||
+                (r.matric_no || '').toLowerCase().includes(q))
+            );
+          }
+
+          const totalStudents = courses.reduce((s, c) => s + c.rows.length, 0);
+          const publishedCount = courses.reduce((s, c) => s + c.rows.filter(r => r.is_published).length, 0);
+
+          return {
+            id: d.id,
+            name: d.name,
+            code: d.code,
+            meta: {
+              custom: `<span class="meta-chip">📖 ${courses.length} course(s) · ${totalStudents} result(s) · ${publishedCount} published</span>`,
+            },
+            renderBody: () => renderDeptBody(filteredCourses, d),
+            onBodyReady: (bd) => wireBody(bd),
+          };
+        });
+
+        acc.render(items);
+      }
+
+      /* ============================================================
+         DEPARTMENT BODY
+         ============================================================ */
+      function renderDeptBody(courses, dept) {
+        if (!courses.length) {
+          return `
+            <div class="empty" style="padding:40px;">
+              <div class="empty-icon">📈</div>
+              <h3>No results ${state.search ? 'match your search' : 'in ' + esc(dept.name)}</h3>
+            </div>`;
+        }
+
+        return courses.map(c => {
+          const total = c.rows.length;
+          const avg = total
+            ? (c.rows.reduce((s, r) => s + parseFloat(r.total_score || 0), 0) / total).toFixed(1)
+            : '—';
+          const published = c.rows.filter(r => r.is_published).length;
+          const statusSet = new Set(c.rows.map(r => r.submission_status || 'draft'));
+          const status = statusSet.size === 1 ? [...statusSet][0] : 'mixed';
+
+          const statusBadge = {
+            draft:     'badge-gray',
+            submitted: 'badge-yellow',
+            approved:  'badge-green',
+            returned:  'badge-red',
+            mixed:     'badge-orange',
+          }[status] || 'badge-gray';
+
+          return `
+            <div style="border-top:1px solid var(--border);">
+              <div style="padding:14px 20px;display:flex;align-items:center;gap:14px;background:#fafbfd;cursor:pointer;"
+                   data-course-toggle="${c.course_id}">
+                <span style="font-weight:800;font-size:14px;">${esc(c.code)} — ${esc(c.title)}</span>
+                <span class="badge ${statusBadge}">${esc(status)}</span>
+                <div style="margin-left:auto;display:flex;gap:16px;font-size:12.5px;color:var(--ink-3);">
+                  <span><strong>${total}</strong> student(s)</span>
+                  <span>avg <strong>${avg}</strong></span>
+                  <span>${published}/${total} published</span>
+                  <button class="btn btn-ghost btn-sm" data-view-course="${c.course_id}"
+                          data-course-code="${esc(c.code)}"
+                          data-course-title="${esc(c.title)}">
+                    View Detail
+                  </button>
+                </div>
+              </div>
+              <div data-course-body="${c.course_id}" hidden>
+                ${renderCourseStudents(c)}
+              </div>
+            </div>`;
+        }).join('');
+      }
+
+      function renderCourseStudents(course) {
+        const gradeBadge = (g) => ({
+          A: 'badge-green', B: 'badge-blue', C: 'badge-blue',
+          D: 'badge-yellow', E: 'badge-yellow', F: 'badge-red',
+        }[g] || 'badge-gray');
+
+        return `
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Matric</th>
+                  <th style="text-align:right;">CA</th>
+                  <th style="text-align:right;">Exam</th>
+                  <th style="text-align:right;">Total</th>
+                  <th style="text-align:right;">Grade</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${course.rows.map(r => `
+                  <tr>
+                    <td>${esc(r.student_name)}</td>
+                    <td>${esc(r.matric_no)}</td>
+                    <td style="text-align:right;">${parseFloat(r.ca_score || 0).toFixed(1)}</td>
+                    <td style="text-align:right;">${parseFloat(r.exam_score || 0).toFixed(1)}</td>
+                    <td style="text-align:right;"><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
+                    <td style="text-align:right;"><span class="badge ${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
+                    <td>${r.is_published
+                      ? '<span class="badge badge-green">Published</span>'
+                      : '<span class="badge badge-gray">Draft</span>'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
+
+      function wireBody(bd) {
+        // Per-course expand/collapse inside the department
+        bd.querySelectorAll('[data-course-toggle]').forEach(head => {
+          head.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return; // ignore clicks on View Detail
+            const id = head.dataset.courseToggle;
+            const body = bd.querySelector(`[data-course-body="${id}"]`);
+            if (body) body.hidden = !body.hidden;
+          });
+        });
+
+        bd.querySelectorAll('[data-view-course]').forEach(b =>
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCourseDetail(
+              parseInt(b.dataset.viewCourse, 10),
+              b.dataset.courseCode,
+              b.dataset.courseTitle
+            );
+          }));
+      }
+
+      /* ============================================================
+         COURSE DETAIL MODAL
+         ============================================================ */
+      async function openCourseDetail(courseId, code, title) {
+        // Find rows in state
+        const course = state.results.filter(r => r.course_id === courseId);
+        if (!course.length) { alert('No results for this course yet.'); return; }
+
+        const first = course[0];
+        const published = course.filter(r => r.is_published).length;
+        const avg = (course.reduce((s, r) => s + parseFloat(r.total_score || 0), 0) / course.length).toFixed(2);
+
+        const gradeBadge = (g) => ({
+          A: 'badge-green', B: 'badge-blue', C: 'badge-blue',
+          D: 'badge-yellow', E: 'badge-yellow', F: 'badge-red',
+        }[g] || 'badge-gray');
+
+        openModal({
+          title: `${code} — ${title}`,
+          subtitle: `${first.session_name} · ${first.semester_name}`,
+          size: 'lg',
+          confirmText: 'Close',
+          body: `
+            <div class="result-summary" style="margin:-22px -22px 20px;border-radius:0;">
+              <div>
+                <div class="k">Students</div>
+                <div class="v">${course.length}</div>
+              </div>
+              <div>
+                <div class="k">Average</div>
+                <div class="v">${avg}</div>
+              </div>
+              <div>
+                <div class="k">Published</div>
+                <div class="v">${published}/${course.length}</div>
+              </div>
+              <div>
+                <div class="k">Status</div>
+                <div class="v">
+                  ${(() => {
+                    const set = new Set(course.map(r => r.submission_status || 'draft'));
+                    const status = set.size === 1 ? [...set][0] : 'mixed';
+                    const cls = { draft:'badge-gray', submitted:'badge-yellow', approved:'badge-green', returned:'badge-red', mixed:'badge-orange' }[status];
+                    return `<span class="badge ${cls}">${status}</span>`;
+                  })()}
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap" style="box-shadow:none;max-height:480px;overflow-y:auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Matric</th>
+                    <th style="text-align:right;">CA</th>
+                    <th style="text-align:right;">Exam</th>
+                    <th style="text-align:right;">Total</th>
+                    <th style="text-align:right;">Grade</th>
+                    <th style="text-align:right;">Published</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${course.map(r => `
+                    <tr>
+                      <td>${esc(r.student_name)}</td>
+                      <td>${esc(r.matric_no)}</td>
+                      <td style="text-align:right;">${parseFloat(r.ca_score || 0).toFixed(1)}</td>
+                      <td style="text-align:right;">${parseFloat(r.exam_score || 0).toFixed(1)}</td>
+                      <td style="text-align:right;"><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
+                      <td style="text-align:right;"><span class="badge ${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
+                      <td style="text-align:right;">${r.is_published
+                        ? '<span class="badge badge-green">Yes</span>'
+                        : '<span class="badge badge-gray">No</span>'}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          `,
+          onConfirm: (_b, close) => close(),
+        });
+      }
+
+      /* ============================================================
+         BIND
+         ============================================================ */
+      function bind() {
+        $('#statusFilter').addEventListener('change', (e) => { state.status = e.target.value; load(); });
+        $('#publishFilter').addEventListener('change', (e) => { state.publish = e.target.value; load(); });
+
+        let t;
+        $('#searchInput').addEventListener('input', (e) => {
+          clearTimeout(t);
+          t = setTimeout(() => { state.search = e.target.value.trim(); load(); }, 350);
+        });
+
+        $('#btnReset').addEventListener('click', () => {
+          state.status = ''; state.publish = ''; state.search = '';
+          $('#statusFilter').value = ''; $('#publishFilter').value = ''; $('#searchInput').value = '';
+          load();
+        });
+
+        $('#btnExpandAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card').forEach(c => {
+            if (!c.classList.contains('open')) c.querySelector('.dept-head')?.click();
+          });
+        });
+        $('#btnCollapseAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card.open').forEach(c =>
+            c.querySelector('.dept-head')?.click());
+        });
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      function boot() {
+        if (window.__adminResultsBooted) return;
+        window.__adminResultsBooted = true;
+        bind();
+        load();
+      }
+
+      document.addEventListener('sa:layout-ready', boot);
+      setTimeout(boot, 1500);
+    })();
+  </script>
 </body>
 </html>

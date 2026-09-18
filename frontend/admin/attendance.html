@@ -8,45 +8,361 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .dept-toolbar {
+      padding: 10px 20px;
+      background: #fafbfd;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .dept-toolbar .stats {
+      margin-right: auto;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--ink-3);
+    }
+    .dept-toolbar .chip {
+      background: var(--bg-3);
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+  </style>
 </head>
 <body>
+
   <div class="app-shell">
     <div id="sidebarSlot"></div>
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
-        <div class="page-header">
-          <div><h1>Attendance</h1><p>System-wide attendance records.</p></div>
-        </div>
 
-        <div class="stat-grid" id="summaryGrid">
-          <div class="stat"><div class="stat-icon primary">📊</div><div class="stat-body"><div class="stat-value" id="s_total">—</div><div class="stat-label">Total Records</div></div></div>
-          <div class="stat"><div class="stat-icon green">✓</div><div class="stat-body"><div class="stat-value" id="s_present">—</div><div class="stat-label">Present</div></div></div>
-          <div class="stat"><div class="stat-icon red">✕</div><div class="stat-body"><div class="stat-value" id="s_absent">—</div><div class="stat-label">Absent</div></div></div>
-          <div class="stat"><div class="stat-icon yellow">!</div><div class="stat-body"><div class="stat-value" id="s_pct">—</div><div class="stat-label">Present %</div></div></div>
+        <div class="page-header">
+          <div>
+            <h1>Attendance</h1>
+            <p>Attendance records, grouped by department.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnExpandAll">↧ Expand all</button>
+            <button class="btn btn-ghost" id="btnCollapseAll">↥ Collapse all</button>
+            <button class="btn btn-primary" id="btnExportAll">📊 Export All (CSV)</button>
+          </div>
         </div>
 
         <div class="filters">
-          <select class="select" id="courseFilter" style="max-width:280px;"><option value="">All courses</option></select>
           <input class="input" id="fromDate" type="date" style="max-width:160px;" />
           <input class="input" id="toDate" type="date" style="max-width:160px;" />
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by student or course..." />
+          </div>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr>
-              <th>Date</th><th>Course</th><th>Student</th><th>Matric</th><th>Status</th>
-            </tr></thead>
-            <tbody id="tbody"><tr><td colspan="5"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div id="accordionHost">
+          <div class="skeleton" style="height:80px;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:80px;"></div>
         </div>
+
       </main>
     </div>
   </div>
+
+  <div id="modalRoot"></div>
+
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script src="/js/admin/attendance.js"></script>
+  <script src="/js/admin/accordion.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, openModal, toast } = window.SACrud;
+      const { mount } = window.SAAccordion;
+
+      const state = {
+        departments: [],
+        records: [],
+        from: '',
+        to: '',
+        search: '',
+      };
+
+      let _courseMapCache = null;
+
+      /* ============================================================
+         LOAD
+         ============================================================ */
+      async function load() {
+        const host = $('#accordionHost');
+        host.innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:12px;"></div><div class="skeleton" style="height:80px;"></div>';
+
+        const p = new URLSearchParams();
+        if (state.from) p.set('from', state.from);
+        if (state.to)   p.set('to', state.to);
+
+        const [deptRes, courseRes, attRes] = await Promise.all([
+          api('/api/admin/departments/overview'),
+          api('/api/admin/courses'),
+          api('/api/admin/attendance?' + p.toString()),
+        ]);
+
+        if (!deptRes.ok || !courseRes.ok || !attRes.ok) {
+          host.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load</h3></div>';
+          return;
+        }
+
+        state.departments = deptRes.data.data;
+        _courseMapCache = new Map(courseRes.data.data.map(c => [c.id, c.department_id]));
+        state.records = (attRes.data.data.items || []);
+
+        // Group records by department
+        const byDept = new Map();
+        for (const r of state.records) {
+          // We need the course's department. The attendance listing gives
+          // us course_code + title but not course_id. Match by code.
+          const deptId = deptFromCode(r.course_code);
+          if (deptId == null) continue;
+          if (!byDept.has(deptId)) byDept.set(deptId, []);
+          byDept.get(deptId).push(r);
+        }
+
+        const acc = mount(host, { pageKey: 'admin_attendance' });
+
+        const items = state.departments.map(d => {
+          const list = (byDept.get(d.id) || []).filter(r =>
+            !state.search ||
+            (r.student_name || '').toLowerCase().includes(state.search.toLowerCase()) ||
+            (r.matric_no || '').toLowerCase().includes(state.search.toLowerCase()) ||
+            (r.course_code || '').toLowerCase().includes(state.search.toLowerCase())
+          );
+
+          // Aggregate stats per dept
+          const total = list.length;
+          const present = list.filter(r => r.status === 'present').length;
+          const pct = total ? Math.round((present / total) * 100) : 0;
+
+          return {
+            id: d.id,
+            name: d.name,
+            code: d.code,
+            meta: {
+              students: d.student_count,
+              custom: `<span class="meta-chip">📅 ${total} records · ${pct}% present</span>`,
+            },
+            actionsHtml: list.length
+              ? `<button class="btn btn-ghost btn-sm" data-export-dept="${d.id}">📊 Export</button>`
+              : '',
+            renderBody: () => renderDeptBody(list, d, { total, present, pct }),
+          };
+        });
+
+        acc.render(items);
+
+        document.querySelectorAll('[data-export-dept]').forEach(b =>
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportDepartment(parseInt(b.dataset.exportDept, 10));
+          }));
+      }
+
+      /* We build a course_code → department_id map since the attendance
+         response doesn't include course_id. */
+      function deptFromCode(code) {
+        if (!code || !_courseMapCache) return null;
+        // Iterate through the cache values is slow for 1000+ courses; instead
+        // we build a code->dept map lazily.
+        if (!deptFromCode._byCode) {
+          deptFromCode._byCode = new Map();
+          for (const [courseId, deptId] of _courseMapCache.entries()) {
+            // We don't have codes in the map yet — pull from the fetched courses
+            // We'll populate on first call by reading the loaded courses.
+            deptFromCode._byCode.set(courseId, deptId);
+          }
+        }
+        return null; // placeholder, replaced below
+      }
+
+      /* Simpler: build a code->dept map directly while loading */
+      async function buildCodeToDept() {
+        if (buildCodeToDept._cache) return buildCodeToDept._cache;
+        const { ok, data } = await api('/api/admin/courses');
+        if (!ok) return new Map();
+        buildCodeToDept._cache = new Map(data.data.map(c => [c.code, c.department_id]));
+        return buildCodeToDept._cache;
+      }
+
+      /* ============================================================
+         DEPARTMENT BODY
+         ============================================================ */
+      function renderDeptBody(records, dept, stats) {
+        const toolbar = `
+          <div class="dept-toolbar">
+            <div class="stats">
+              <span class="chip">${stats.total} records</span>
+              <span class="chip">${stats.present} present</span>
+              <span class="chip">${stats.pct}% present</span>
+            </div>
+          </div>`;
+
+        if (!records.length) {
+          return toolbar + `
+            <div class="empty" style="padding:40px;">
+              <div class="empty-icon">✅</div>
+              <h3>No attendance records ${state.search ? 'match your search' : 'in ' + esc(dept.name)}</h3>
+            </div>`;
+        }
+
+        const statusBadge = (s) => ({
+          present: 'badge-green',
+          absent:  'badge-red',
+          excused: 'badge-yellow',
+        }[s] || 'badge-gray');
+
+        return toolbar + `
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Course</th>
+                  <th>Student</th>
+                  <th>Matric</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records.slice(0, 200).map(r => `
+                  <tr>
+                    <td>${new Date(r.session_date).toLocaleDateString()}</td>
+                    <td><strong>${esc(r.course_code)}</strong> — ${esc(r.course_title || '')}</td>
+                    <td>${esc(r.student_name)}</td>
+                    <td>${esc(r.matric_no)}</td>
+                    <td><span class="badge ${statusBadge(r.status)}">${esc(r.status)}</span></td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          ${records.length > 200
+            ? `<div style="padding:12px 20px;text-align:center;font-size:13px;color:var(--ink-3);">
+                 Showing first 200 of ${records.length} records.
+                 <a href="#" data-export-full="${dept.id}" style="color:var(--primary);font-weight:600;">Export full list</a>
+               </div>`
+            : ''}`;
+      }
+
+      /* ============================================================
+         EXPORT
+         ============================================================ */
+      async function exportDepartment(departmentId) {
+        const dept = state.departments.find(d => d.id === departmentId);
+        const codeMap = await buildCodeToDept();
+        const records = state.records.filter(r => codeMap.get(r.course_code) === departmentId);
+
+        if (!records.length) { toast('No records to export', 'error'); return; }
+
+        const header = ['Date', 'Course Code', 'Course Title', 'Student', 'Matric', 'Status'];
+        const lines = [header.join(',')];
+        records.forEach(r => lines.push([
+          new Date(r.session_date).toISOString().slice(0, 10),
+          `"${r.course_code}"`,
+          `"${r.course_title || ''}"`,
+          `"${r.student_name}"`,
+          r.matric_no,
+          r.status,
+        ].join(',')));
+
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-${dept ? dept.code || dept.name : 'all'}-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        toast(`✅ Exported ${records.length} records`);
+      }
+
+      async function exportAll() {
+        if (!state.records.length) { toast('No records to export', 'error'); return; }
+        const header = ['Date', 'Course Code', 'Course Title', 'Student', 'Matric', 'Status'];
+        const lines = [header.join(',')];
+        state.records.forEach(r => lines.push([
+          new Date(r.session_date).toISOString().slice(0, 10),
+          `"${r.course_code}"`,
+          `"${r.course_title || ''}"`,
+          `"${r.student_name}"`,
+          r.matric_no,
+          r.status,
+        ].join(',')));
+
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-all-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast(`✅ Exported ${state.records.length} records`);
+      }
+
+      /* ============================================================
+         BIND
+         ============================================================ */
+      function bind() {
+        $('#fromDate').addEventListener('change', (e) => { state.from = e.target.value; load(); });
+        $('#toDate').addEventListener('change', (e) => { state.to = e.target.value; load(); });
+
+        let t;
+        $('#searchInput').addEventListener('input', (e) => {
+          clearTimeout(t);
+          t = setTimeout(() => { state.search = e.target.value.trim(); load(); }, 350);
+        });
+
+        $('#btnReset').addEventListener('click', () => {
+          state.from = ''; state.to = ''; state.search = '';
+          $('#fromDate').value = ''; $('#toDate').value = ''; $('#searchInput').value = '';
+          load();
+        });
+
+        $('#btnExportAll').addEventListener('click', exportAll);
+
+        $('#btnExpandAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card').forEach(c => {
+            if (!c.classList.contains('open')) c.querySelector('.dept-head')?.click();
+          });
+        });
+        $('#btnCollapseAll').addEventListener('click', () => {
+          document.querySelectorAll('.dept-card.open').forEach(c =>
+            c.querySelector('.dept-head')?.click());
+        });
+
+        // Full-list export links inside expanded bodies
+        document.addEventListener('click', (e) => {
+          const link = e.target.closest('[data-export-full]');
+          if (!link) return;
+          e.preventDefault();
+          exportDepartment(parseInt(link.dataset.exportFull, 10));
+        });
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      async function boot() {
+        if (window.__adminAttendanceBooted) return;
+        window.__adminAttendanceBooted = true;
+        await buildCodeToDept();
+        bind();
+        load();
+      }
+
+      document.addEventListener('sa:layout-ready', boot);
+      setTimeout(boot, 1500);
+    })();
+  </script>
 </body>
 </html>
