@@ -28,9 +28,14 @@ router.get('/dashboard', asyncHandler(ctrl.getDashboard));
 router.get('/courses', asyncHandler(ctrl.listMyCourses));
 
 /* ============================================================
-   STUDENTS
+   STUDENTS (scoped to lecturer's courses)
    ============================================================ */
 router.get('/students', asyncHandler(ctrl.listStudents));
+router.get('/student/:id',
+  param('id').isInt(),
+  validate,
+  asyncHandler(ctrl.getStudentDetail)
+);
 
 /* ============================================================
    CLASS SESSIONS
@@ -97,6 +102,13 @@ router.post('/assessments/:id/scores',
    ============================================================ */
 router.get('/results', asyncHandler(ctrl.listResults));
 
+// Per-course detail — only courses the lecturer teaches
+router.get('/results/:courseId/detail',
+  param('courseId').isInt(),
+  validate,
+  asyncHandler(ctrl.getCourseResultDetail)
+);
+
 /* ============================================================
    REPORTS
    ============================================================ */
@@ -109,7 +121,6 @@ router.get('/reports/student-averages', asyncHandler(ctrl.studentAveragesReport)
    AT-RISK STUDENTS
    ============================================================ */
 router.get('/at-risk', asyncHandler(ctrl.listAtRisk));
-router.get('/student/:id', param('id').isInt(), validate, asyncHandler(ctrl.getStudentDetail));
 
 // Lecturer creates an intervention directly
 router.post('/at-risk/:studentId/intervene',
