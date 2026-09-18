@@ -226,6 +226,19 @@ router.post('/registrations/:id/drop',
   asyncHandler(adminController.dropRegistration)
 );
 
+// Bulk operations — return per-row success/failure
+router.post('/registrations/bulk-approve',
+  b('ids').isArray({ min: 1 }),
+  validate,
+  asyncHandler(adminController.bulkApproveRegistrations)
+);
+
+router.post('/registrations/bulk-drop',
+  b('ids').isArray({ min: 1 }),
+  validate,
+  asyncHandler(adminController.bulkDropRegistrations)
+);
+
 router.delete('/registrations/:id',
   p('id').isInt(), validate,
   asyncHandler(academicController.deleteRegistration)
@@ -253,14 +266,14 @@ router.post('/students/:id/mark-fees-unpaid',
 router.get('/attendance', asyncHandler(academicController.listAttendance));
 
 /* ============================================================
-   RESULTS (list / edit / delete)
+   RESULTS
    ============================================================ */
 router.get('/results', asyncHandler(academicController.listResults));
 router.put('/results/:id', p('id').isInt(), validate, asyncHandler(academicController.updateResult));
 router.post('/results/:id/publish', p('id').isInt(), validate, asyncHandler(academicController.publishResult));
 router.delete('/results/:id', p('id').isInt(), validate, asyncHandler(academicController.deleteResult));
 
-// Safe delete — respects publish policy
+// Safe delete — respects publish policy (blocked if published, soft-return if approved)
 router.delete('/results/:id/safe',
   p('id').isInt(), validate,
   asyncHandler(adminController.deleteResultSafely)
@@ -277,6 +290,12 @@ router.get('/risk/student/:studentId/history',
 );
 
 router.post('/risk/recompute', asyncHandler(riskController.recompute));
+
+router.get('/risk/recompute-status/:jobId',
+  p('jobId').isString().notEmpty(),
+  validate,
+  asyncHandler(riskController.recomputeStatus)
+);
 
 /* ============================================================
    INTERVENTIONS
@@ -466,13 +485,10 @@ router.delete('/profile/photo', asyncHandler(adminController.removeOwnPhoto));
 /* ============================================================
    PUBLISH RESULTS (grouped by department)
    ============================================================ */
-
-// Grouped listing — one row per department
 router.get('/publish/result-submissions',
   asyncHandler(adminController.listPublishableResultsGrouped)
 );
 
-// Publish all approved results in one department
 router.post('/publish/department/:departmentId',
   p('departmentId').isInt(),
   b('session_id').isInt(),
@@ -481,7 +497,6 @@ router.post('/publish/department/:departmentId',
   asyncHandler(adminController.publishDepartment)
 );
 
-// Publish across multiple departments at once
 router.post('/publish/departments-bulk',
   b('department_ids').isArray({ min: 1 }),
   b('session_id').isInt(),
@@ -490,7 +505,6 @@ router.post('/publish/departments-bulk',
   asyncHandler(adminController.publishDepartmentsBulk)
 );
 
-// Unpublish all results in one department
 router.post('/unpublish/department/:departmentId',
   p('departmentId').isInt(),
   b('session_id').isInt(),
@@ -500,7 +514,7 @@ router.post('/unpublish/department/:departmentId',
 );
 
 /* ============================================================
-   LEGACY PUBLISH ENDPOINTS (kept for compatibility)
+   LEGACY PUBLISH ENDPOINTS (kept for backward compatibility)
    ============================================================ */
 router.get('/publish/result-submissions-flat', asyncHandler(adminController.listPublishableResults));
 
@@ -528,9 +542,6 @@ router.post('/publish-bulk',
   asyncHandler(adminController.publishResultsBulk)
 );
 
-/* ============================================================
-   QUICK DB REFERENCE
-   ============================================================ */
 const db = require('../config/db');
 
 module.exports = router;

@@ -1,7 +1,8 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Admin Controller
-// Dashboard stats, activity feed, attendance trend, users CRUD,
-// fee tracking, result publishing (by department), result deletion.
+// Dashboard stats, users CRUD, fee tracking,
+// result publishing (by department), safe result deletion,
+// bulk registration actions.
 // ============================================================
 
 'use strict';
@@ -235,7 +236,7 @@ async function listRoles(req, res, next) {
 }
 
 /* ============================================================
-   UPDATE OWN PROFILE / CHANGE PASSWORD
+   OWN PROFILE / CHANGE PASSWORD
    ============================================================ */
 async function updateOwnProfile(req, res, next) {
   try {
@@ -278,7 +279,7 @@ async function changeOwnPassword(req, res, next) {
 }
 
 /* ============================================================
-   COURSE REGISTRATION — Approve / Drop / Mark Fees Paid
+   REGISTRATION ACTIONS
    ============================================================ */
 async function approveRegistration(req, res, next) {
   try {
@@ -349,6 +350,147 @@ async function dropRegistration(req, res, next) {
     });
 
     res.json({ success: true, message: 'Registration dropped.' });
+  } catch (err) { next(err); }
+}
+
+/* ============================================================
+   BULK REGISTRATION ACTIONS
+   Return per-row success/failure lists.
+   ============================================================ */
+async function bulkApproveRegistrations(req, res, next) {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) {
+      throw new AppError('ids array required.', 400);
+    }
+
+    const approved = [];
+    const failed = [];
+    const notifyStudent = new Map(); // student_id → [codes]
+
+    for (const raw of ids) {
+      const id = parseInt(raw, 10);
+      if (!id) { failed.push({ id: raw, error: 'Invalid ID' }); continue; }
+      try {
+        const r = await db.query(`
+          SELECT cr.id, cr.status, cr.student_id, c.code
+            FROM course_registrations cr
+            JOIN courses c ON c.id = cr.course_id
+           WHERE cr.id = $1
+        `, [id]);
+        if (!r.rows[0]) { failed.push({ id, error: 'Not found' }); continue; }
+
+        const row = r.rows[0];
+
+        if (row.status === 'approved') {
+          approved.push({ id, code: row.code });
+          continue;
+        }
+        if (row.status === 'dropped') {
+          failed.push({ id, error: 'Registration was dropped' });
+          continue;
+        }
+
+        await db.query(`
+          UPDATE course_registrations
+             SET status = 'approved',
+                 approved_at = NOW(),
+                 approved_by = $2
+           WHERE id = $1
+        `, [id, req.user.id]);
+
+        approved.push({ id, code: row.code });
+
+        if (!notifyStudent.has(row.student_id)) notifyStudent.set(row.student_id, []);
+        notifyStudent.get(row.student_id).push(row.code);
+      } catch (err) {
+        failed.push({ id, error: err.message });
+      }
+    }
+
+    // Send ONE notification per student with a summary of their approved courses
+    for (const [studentId, codes] of notifyStudent.entries()) {
+      const st = await db.query('SELECT user_id FROM students WHERE id = $1', [studentId]);
+      if (!st.rows[0]) continue;
+      const summary = codes.length === 1
+        ? `Your registration for ${codes[0]} has been approved.`
+        : `${codes.length} of your course registrations have been approved.`;
+      await db.query(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES ($1, 'Course registration approved', $2, 'result')
+      `, [st.rows[0].user_id, summary]);
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'bulk_approve_registrations',
+      module: 'registrations',
+      details: { approved: approved.length, failed: failed.length },
+      ip_address: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `${approved.length} approved, ${failed.length} failed.`,
+      data: { approved, failed },
+    });
+  } catch (err) { next(err); }
+}
+
+async function bulkDropRegistrations(req, res, next) {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) {
+      throw new AppError('ids array required.', 400);
+    }
+
+    const dropped = [];
+    const failed = [];
+
+    for (const raw of ids) {
+      const id = parseInt(raw, 10);
+      if (!id) { failed.push({ id: raw, error: 'Invalid ID' }); continue; }
+      try {
+        const r = await db.query(`
+          SELECT cr.id, cr.status, c.code
+            FROM course_registrations cr
+            JOIN courses c ON c.id = cr.course_id
+           WHERE cr.id = $1
+        `, [id]);
+        if (!r.rows[0]) { failed.push({ id, error: 'Not found' }); continue; }
+
+        const row = r.rows[0];
+        if (row.status === 'dropped') {
+          dropped.push({ id, code: row.code });
+          continue;
+        }
+
+        await db.query(`
+          UPDATE course_registrations
+             SET status = 'dropped',
+                 dropped_at = NOW(),
+                 dropped_by = $2
+           WHERE id = $1
+        `, [id, req.user.id]);
+        dropped.push({ id, code: row.code });
+      } catch (err) {
+        failed.push({ id, error: err.message });
+      }
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'bulk_drop_registrations',
+      module: 'registrations',
+      details: { dropped: dropped.length, failed: failed.length },
+      ip_address: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `${dropped.length} dropped, ${failed.length} failed.`,
+      data: { dropped, failed },
+    });
   } catch (err) { next(err); }
 }
 
@@ -501,13 +643,8 @@ async function removeOwnPhoto(req, res, next) {
 }
 
 /* ============================================================
-   PUBLISH RESULTS — helpers
+   PUBLISH — helpers
    ============================================================ */
-
-/**
- * Send batched "result published" notifications to students.
- * Grouped per student so we don't send N notifications for N courses.
- */
 async function notifyPublishedStudents(rows) {
   if (!rows || !rows.length) return;
 
@@ -551,20 +688,6 @@ async function notifyPublishedStudents(rows) {
 /* ============================================================
    PUBLISH — GROUPED BY DEPARTMENT
    ============================================================ */
-
-/**
- * GET /api/admin/publish/result-submissions
- * Query: status=approved (default)
- *
- * Returns an array of departments, each with:
- *   { department_id, department_name,
- *     totals: { courses, students, published, unpublished },
- *     status: 'published' | 'partial' | 'approved',
- *     courses: [ { course_id, code, title, level,
- *                  session_id, session_name, semester_id, semester_name,
- *                  students, published_count, unpublished_count,
- *                  approved_at } ] }
- */
 async function listPublishableResultsGrouped(req, res, next) {
   try {
     const { status = 'approved' } = req.query;
@@ -592,7 +715,6 @@ async function listPublishableResultsGrouped(req, res, next) {
       ORDER BY d.name, c.code
     `, [status]);
 
-    // Group by department in JS
     const deptMap = new Map();
     for (const row of r.rows) {
       if (!deptMap.has(row.department_id)) {
@@ -626,10 +748,6 @@ async function listPublishableResultsGrouped(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/publish/department/:departmentId
- * Body: { session_id, semester_id }
- */
 async function publishDepartment(req, res, next) {
   try {
     const departmentId = parseInt(req.params.departmentId, 10);
@@ -676,10 +794,6 @@ async function publishDepartment(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/publish/departments-bulk
- * Body: { department_ids: [...], session_id, semester_id }
- */
 async function publishDepartmentsBulk(req, res, next) {
   try {
     const { department_ids, session_id, semester_id } = req.body;
@@ -726,10 +840,6 @@ async function publishDepartmentsBulk(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * POST /api/admin/unpublish/department/:departmentId
- * Body: { session_id, semester_id }
- */
 async function unpublishDepartment(req, res, next) {
   try {
     const departmentId = parseInt(req.params.departmentId, 10);
@@ -851,11 +961,9 @@ async function deleteResultSafely(req, res, next) {
 }
 
 /* ============================================================
-   LEGACY PUBLISH ENDPOINTS (kept for backward compatibility)
+   LEGACY PUBLISH ENDPOINTS
    ============================================================ */
-
 async function listPublishableResults(req, res, next) {
-  // Redirect to grouped version
   return listPublishableResultsGrouped(req, res, next);
 }
 
@@ -956,14 +1064,9 @@ async function publishResultsBulk(req, res, next) {
    EXPORTS
    ============================================================ */
 module.exports = {
-  // Profile photo
   uploadOwnPhoto,
   removeOwnPhoto,
-
-  // Dashboard
   getDashboard,
-
-  // Users
   listUsers,
   getUser,
   createUser,
@@ -972,28 +1075,20 @@ module.exports = {
   resetUserPassword,
   deleteUser,
   listRoles,
-
-  // Own profile
   updateOwnProfile,
   changeOwnPassword,
-
-  // Registrations
   approveRegistration,
   dropRegistration,
+  bulkApproveRegistrations,
+  bulkDropRegistrations,
   markFeesPaid,
   markFeesUnpaid,
   listRegistrationsEnhanced,
-
-  // Publish results (grouped by department)
   listPublishableResultsGrouped,
   publishDepartment,
   publishDepartmentsBulk,
   unpublishDepartment,
-
-  // Safe delete
   deleteResultSafely,
-
-  // Legacy publish endpoints
   listPublishableResults,
   publishResults,
   unpublishResults,

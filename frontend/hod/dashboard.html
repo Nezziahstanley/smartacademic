@@ -44,6 +44,7 @@
           <div class="card chart-card">
             <div class="card-header">
               <div><h3>Course Performance</h3><p>Average score per course</p></div>
+              <a href="/hod/performance.html" class="btn btn-ghost btn-sm">View all →</a>
             </div>
             <div class="chart-wrap"><canvas id="courseChart"></canvas></div>
           </div>
@@ -51,6 +52,7 @@
           <div class="card chart-card">
             <div class="card-header">
               <div><h3>Risk Distribution</h3><p>Current snapshot</p></div>
+              <a href="/hod/risk-monitoring.html" class="btn btn-ghost btn-sm">View all →</a>
             </div>
             <div class="chart-wrap"><canvas id="riskChart"></canvas></div>
             <ul class="legend-list" id="riskLegend"></ul>
@@ -76,11 +78,38 @@
               <div><h3>Quick Actions</h3><p>Common tasks</p></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px;">
-              <a href="/hod/students.html" class="btn btn-ghost" style="justify-content:flex-start;">🎓 View Students</a>
-              <a href="/hod/lecturers.html" class="btn btn-ghost" style="justify-content:flex-start;">👨‍🏫 View Lecturers</a>
-              <a href="/hod/attendance.html" class="btn btn-ghost" style="justify-content:flex-start;">✅ Attendance Overview</a>
-              <a href="/hod/performance.html" class="btn btn-ghost" style="justify-content:flex-start;">📊 Performance Analytics</a>
-              <a href="/hod/interventions.html" class="btn btn-primary" style="justify-content:flex-start;">+ Create Intervention</a>
+              <a href="/hod/students.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>🎓 View Students</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/lecturers.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>👨‍🏫 View Lecturers</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/courses.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>📖 View Courses</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/attendance.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>✅ Attendance Overview</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/result-submissions.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>📤 Review Result Submissions</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/performance.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>📊 Performance Analytics</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/risk-monitoring.html" class="btn btn-ghost" style="justify-content:space-between;">
+                <span>🚦 Risk Monitoring</span>
+                <span style="opacity:.5;">→</span>
+              </a>
+              <a href="/hod/interventions.html" class="btn btn-primary" style="justify-content:space-between;">
+                <span>+ Create Intervention</span>
+                <span style="opacity:.5;">→</span>
+              </a>
             </div>
           </div>
         </div>

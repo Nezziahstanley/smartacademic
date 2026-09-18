@@ -1,7 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Admin Risk Monitoring
 // Filters, pagination, detail modal, create intervention,
-// recompute risk, auto-intervene for high-risk students.
+// recompute (with live progress), auto-intervene.
 // ============================================================
 
 'use strict';
@@ -22,7 +22,7 @@
   };
 
   /* ============================================================
-     LOAD DEPARTMENTS (for filter dropdown)
+     LOAD DEPARTMENTS
      ============================================================ */
   async function loadDepartments() {
     const { ok, data } = await api('/api/admin/departments');
@@ -53,7 +53,6 @@
     state.items = data.data.items;
     state.total = data.data.total;
 
-    // Update summary cards
     const s = data.data.summary || { GREEN: 0, YELLOW: 0, ORANGE: 0, RED: 0 };
     $('#sGreen').textContent  = s.GREEN  || 0;
     $('#sYellow').textContent = s.YELLOW || 0;
@@ -208,7 +207,7 @@
   }
 
   /* ============================================================
-     CREATE INTERVENTION MODAL
+     CREATE INTERVENTION
      ============================================================ */
   async function openIntervene(studentId) {
     const [staffRes, studentsRes] = await Promise.all([
@@ -228,7 +227,6 @@
           <label>Title *</label>
           <input class="input" id="f_title" placeholder="e.g. Academic counselling session" />
         </div>
-
         <div class="field">
           <label>Type *</label>
           <select class="select" id="f_type">
@@ -242,7 +240,6 @@
             <option value="other">Other</option>
           </select>
         </div>
-
         <div class="field">
           <label>Assigned to</label>
           <select class="select" id="f_assignee">
@@ -250,7 +247,6 @@
             ${staff.map(s => `<option value="${s.id}">${esc(s.full_name)} (${esc(s.role)})</option>`).join('')}
           </select>
         </div>
-
         <div class="field-row">
           <div class="field">
             <label>Priority</label>
@@ -266,7 +262,6 @@
             <input class="input" id="f_due" type="date" />
           </div>
         </div>
-
         <div class="field">
           <label>Description</label>
           <textarea class="textarea" id="f_desc" rows="3"></textarea>
@@ -299,21 +294,106 @@
   }
 
   /* ============================================================
-     RECOMPUTE RISK
+     RECOMPUTE RISK — with live progress
      ============================================================ */
   async function recompute() {
     if (!confirm('Recompute academic results AND risk for all students? This may take 10–30 seconds.')) return;
 
     const btn = $('#btnRecalc');
-    btn.disabled = true;
     const orig = btn.textContent;
-    btn.textContent = '⏳ Recomputing...';
+    btn.disabled = true;
+    btn.textContent = '⏳ Starting...';
+
+    // Progress modal
+    const { backdrop: bd } = openModal({
+      title: 'Recomputing Risk',
+      subtitle: 'Please wait — do not close this window',
+      confirmText: 'Close',
+      size: 'sm',
+      body: `
+        <div style="text-align:center;padding:10px 0 20px;">
+          <div id="rcStage" style="font-size:14px;color:var(--ink-3);margin-bottom:14px;">
+            Starting job...
+          </div>
+          <div style="width:100%;height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;">
+            <div id="rcBar" style="width:0%;height:100%;background:linear-gradient(90deg,#166534,#22c55e);transition:width .4s ease;"></div>
+          </div>
+          <div id="rcPct" style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);">0%</div>
+        </div>
+        <div id="rcDone" style="display:none;padding:14px;background:#f0fdf4;border-radius:10px;color:#166534;font-size:14px;text-align:center;"></div>
+      `,
+      onConfirm: (_b, closeFn) => closeFn(),
+    });
+
+    const confirmBtn = bd.querySelector('[data-confirm]');
+    if (confirmBtn) confirmBtn.style.display = 'none';
+
+    function setProgress(pct, stage) {
+      bd.querySelector('#rcBar').style.width = pct + '%';
+      bd.querySelector('#rcPct').textContent = pct + '%';
+      if (stage) bd.querySelector('#rcStage').textContent = stage;
+    }
 
     try {
       const { ok, data } = await api('/api/admin/risk/recompute', { method: 'POST' });
-      if (!ok) { alert(data?.error || 'Recompute failed'); return; }
-      toast(`✅ Recomputed ${data.data.risk.count} students (${data.data.results.updated} results updated)`);
-      setTimeout(load, 800);
+      if (!ok) {
+        alert(data?.error || 'Failed to start');
+        if (confirmBtn) confirmBtn.style.display = '';
+        return;
+      }
+
+      const jobId = data.data.jobId;
+      setProgress(5, 'Computing academic results...');
+
+      let attempts = 0;
+      const maxAttempts = 120; // ~2.5 minutes
+
+      const poll = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(poll);
+          setProgress(0, 'Timed out');
+          alert('Recompute is taking too long. Check the server log.');
+          if (confirmBtn) { confirmBtn.style.display = ''; confirmBtn.textContent = 'Close'; }
+          return;
+        }
+
+        const r = await api('/api/admin/risk/recompute-status/' + jobId);
+        if (!r.ok) return;
+
+        const job = r.data.data;
+        const p = job.progress || 0;
+        const stage = p < 40  ? 'Computing academic results...'
+                    : p < 95  ? 'Assessing students for risk...'
+                    : 'Finalizing...';
+        setProgress(p, stage);
+
+        if (job.status === 'complete') {
+          clearInterval(poll);
+
+          const risk = job.result.risk || {};
+          const results = job.result.results || {};
+
+          bd.querySelector('#rcStage').textContent = '✅ Done';
+          bd.querySelector('#rcDone').style.display = 'block';
+          bd.querySelector('#rcDone').innerHTML = `
+            <strong>✅ Recomputed</strong><br>
+            ${risk.count ?? 0} students assessed · ${results.updated ?? 0} results updated
+          `;
+          if (confirmBtn) { confirmBtn.style.display = ''; confirmBtn.textContent = 'Close'; }
+
+          toast(`✅ Recomputed ${risk.count ?? 0} students`);
+          setTimeout(() => { load(); }, 500);
+        } else if (job.status === 'error') {
+          clearInterval(poll);
+          bd.querySelector('#rcStage').textContent = '⚠ Error';
+          bd.querySelector('#rcDone').style.display = 'block';
+          bd.querySelector('#rcDone').style.background = '#fef2f2';
+          bd.querySelector('#rcDone').style.color = '#991b1b';
+          bd.querySelector('#rcDone').textContent = job.error || 'Unknown error';
+          if (confirmBtn) { confirmBtn.style.display = ''; confirmBtn.textContent = 'Close'; }
+        }
+      }, 1200);
     } catch (err) {
       alert('Recompute failed: ' + err.message);
     } finally {
@@ -323,7 +403,7 @@
   }
 
   /* ============================================================
-     AUTO-INTERVENE FOR HIGH-RISK STUDENTS
+     AUTO-INTERVENE
      ============================================================ */
   async function autoIntervene() {
     if (!confirm('Auto-create interventions for all ORANGE/RED students without an open intervention?')) return;
@@ -347,7 +427,7 @@
       } else {
         toast(`✅ Created ${created} interventions (${candidates} candidates)`);
       }
-      setTimeout(load, 600);
+      setTimeout(() => load(), 600);
     } catch (err) {
       alert('Auto-intervene failed: ' + err.message);
     } finally {
@@ -357,31 +437,27 @@
   }
 
   /* ============================================================
-     BIND FILTERS + ACTIONS
+     BIND
      ============================================================ */
   function bind() {
-    // Category filter
     $('#catFilter').addEventListener('change', e => {
       state.category = e.target.value;
       state.page = 1;
       load();
     });
 
-    // Department filter
     $('#deptFilter').addEventListener('change', e => {
       state.department_id = e.target.value;
       state.page = 1;
       load();
     });
 
-    // Level filter
     $('#levelFilter').addEventListener('change', e => {
       state.level = e.target.value;
       state.page = 1;
       load();
     });
 
-    // Search (debounced)
     let t;
     $('#searchInput').addEventListener('input', e => {
       clearTimeout(t);
@@ -392,7 +468,6 @@
       }, 300);
     });
 
-    // Reset
     $('#btnReset').addEventListener('click', () => {
       state.category = '';
       state.department_id = '';
@@ -406,20 +481,18 @@
       load();
     });
 
-    // Recompute risk
     $('#btnRecalc').addEventListener('click', recompute);
 
-    // Auto-intervene (only if the button exists on the page)
     const autoBtn = $('#btnAutoIntervene');
-    if (autoBtn) {
-      autoBtn.addEventListener('click', autoIntervene);
-    }
+    if (autoBtn) autoBtn.addEventListener('click', autoIntervene);
   }
 
   /* ============================================================
      BOOT
      ============================================================ */
   async function boot() {
+    if (window.__riskMonitoringBooted) return;
+    window.__riskMonitoringBooted = true;
     await loadDepartments();
     bind();
     load();

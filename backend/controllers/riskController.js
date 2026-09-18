@@ -1,5 +1,6 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Risk & Intervention Controller
+// Includes background job tracking for the recompute operation.
 // ============================================================
 
 'use strict';
@@ -9,6 +10,17 @@ const model = require('../models/riskModel');
 const adminModel = require('../models/adminModel');
 const { AppError } = require('../middleware/errorHandler');
 const db = require('../config/db');
+
+/* ============================================================
+   RECOMPUTE JOB TRACKING
+   In-memory — fine for a single-process demo.
+   For multi-instance, migrate to a `risk_jobs` table.
+   ============================================================ */
+const recomputeJobs = new Map();
+
+function makeJobId() {
+  return 'rj_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
 
 /* ============ RISK ============ */
 async function listRisk(req, res, next) {
@@ -83,7 +95,6 @@ async function createIntervention(req, res, next) {
       affected_record: `intervention:${r.id}`,
     });
 
-    // Create a notification for the assignee
     if (req.body.assigned_to) {
       await db.query(`
         INSERT INTO notifications (user_id, title, message, type, related_id)
@@ -105,7 +116,6 @@ async function updateIntervention(req, res, next) {
 
     await model.updateIntervention(id, req.body);
 
-    // Notify student if status changed to Completed/Closed
     if (req.body.status && req.body.status !== before.status) {
       const st = await db.query('SELECT user_id FROM students WHERE id = $1', [before.student_id]);
       if (st.rows[0]) {
@@ -116,7 +126,10 @@ async function updateIntervention(req, res, next) {
       }
     }
 
-    await adminModel.writeAudit({ user_id: req.user.id, action: 'update_intervention', module: 'interventions', affected_record: `intervention:${id}` });
+    await adminModel.writeAudit({
+      user_id: req.user.id, action: 'update_intervention', module: 'interventions',
+      affected_record: `intervention:${id}`,
+    });
     res.json({ success: true, message: 'Updated.' });
   } catch (err) { next(err); }
 }
@@ -124,7 +137,9 @@ async function updateIntervention(req, res, next) {
 async function deleteIntervention(req, res, next) {
   try {
     await model.deleteIntervention(parseInt(req.params.id, 10));
-    await adminModel.writeAudit({ user_id: req.user.id, action: 'delete_intervention', module: 'interventions' });
+    await adminModel.writeAudit({
+      user_id: req.user.id, action: 'delete_intervention', module: 'interventions',
+    });
     res.json({ success: true });
   } catch (err) { next(err); }
 }
@@ -134,26 +149,84 @@ async function listStaff(req, res, next) {
   try { res.json({ success: true, data: await model.listStaffCandidates() }); }
   catch (err) { next(err); }
 }
+
 async function listStudentsSelect(req, res, next) {
   try { res.json({ success: true, data: await model.listStudentsForSelect() }); }
   catch (err) { next(err); }
 }
 
-const riskEngine = require('../services/riskEngine');
-
+/* ============================================================
+   RECOMPUTE RISK — background job
+   Returns immediately with a jobId. Frontend polls status.
+   ============================================================ */
 async function recompute(req, res, next) {
   try {
-    const info = await riskEngine.fullRecompute({});
-    await adminModel.writeAudit({
-      user_id: req.user.id,
-      action: 'recompute_risk',
-      module: 'risk',
-      details: { students: info.risk.count, results: info.results.updated },
+    const jobId = makeJobId();
+
+    recomputeJobs.set(jobId, {
+      status: 'running',
+      progress: 0,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      result: null,
+      error: null,
     });
-    res.json({ success: true, data: info });
+
+    // Capture user id and ip for the audit log at the end
+    const userId = req.user.id;
+    const userIp = req.ip;
+
+    // Fire-and-forget
+    (async () => {
+      const job = recomputeJobs.get(jobId);
+      try {
+        // Stage 1 — recompute results from scores
+        job.progress = 10;
+        const academicEngine = require('../services/academicEngine');
+        const resultsInfo = await academicEngine.recomputeResults({});
+        job.progress = 40;
+
+        // Stage 2 — recompute risk for all students
+        const riskEngine = require('../services/riskEngine');
+        const riskInfo = await riskEngine.assessAllStudents({});
+        job.progress = 95;
+
+        job.result = { results: resultsInfo, risk: riskInfo };
+        job.progress = 100;
+        job.status = 'complete';
+        job.finishedAt = new Date().toISOString();
+
+        await adminModel.writeAudit({
+          user_id: userId,
+          action: 'recompute_risk',
+          module: 'risk',
+          details: { students: riskInfo.count, results: resultsInfo.updated },
+          ip_address: userIp,
+        });
+      } catch (err) {
+        console.error('[recompute job]', err);
+        job.status = 'error';
+        job.error = err.message;
+        job.finishedAt = new Date().toISOString();
+      }
+
+      // Auto-clean after 10 minutes
+      setTimeout(() => recomputeJobs.delete(jobId), 10 * 60 * 1000);
+    })();
+
+    res.json({ success: true, data: { jobId, status: 'running' } });
   } catch (err) { next(err); }
 }
 
+async function recomputeStatus(req, res, next) {
+  try {
+    const job = recomputeJobs.get(req.params.jobId);
+    if (!job) throw new AppError('Job not found or expired.', 404);
+    res.json({ success: true, data: job });
+  } catch (err) { next(err); }
+}
+
+/* ============ AUTO-INTERVENE ============ */
 async function autoIntervene(req, res, next) {
   try {
     const info = await interventionService.autoCreateForHighRisk({});
@@ -168,9 +241,17 @@ async function autoIntervene(req, res, next) {
 }
 
 module.exports = {
-  listRisk, getRisk, getStudentRiskHistory,
-  listInterventions, getIntervention, createIntervention, updateIntervention, deleteIntervention,
-  listStaff, listStudentsSelect,
+  listRisk,
+  getRisk,
+  getStudentRiskHistory,
+  listInterventions,
+  getIntervention,
+  createIntervention,
+  updateIntervention,
+  deleteIntervention,
+  listStaff,
+  listStudentsSelect,
   recompute,
+  recomputeStatus,
   autoIntervene,
 };

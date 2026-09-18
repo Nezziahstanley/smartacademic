@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batch ID Cards — SMARTACADEMIC Admin</title>
+  <link rel="icon" type="image/png" href="/assets/images/fpu-logo.png" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <script src="/js/lib/qrcode.min.js"></script>
+  <style>
+    /* ---- Grid of printable cards ---- */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 18px;
+    }
+
+    .id-card {
+      width: 340px;
+      height: 214px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #166534 0%, #ca8a04 100%);
+      color: #fff;
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 6px 20px rgba(22,101,52,0.18);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .id-card::before {
+      content: ""; position: absolute;
+      width: 180px; height: 180px; border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      top: -70px; right: -50px; pointer-events: none;
+    }
+    .id-card::after {
+      content: ""; position: absolute;
+      width: 140px; height: 140px; border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      bottom: -70px; left: -40px; pointer-events: none;
+    }
+
+    .id-top { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12px; position: relative; z-index: 2; }
+    .id-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: rgba(255,255,255,0.2); font-size: 12px; }
+
+    .id-body { display: flex; gap: 10px; margin-top: 8px; align-items: flex-start; position: relative; z-index: 2; }
+    .id-photo {
+      width: 60px; height: 72px; border-radius: 8px;
+      background: rgba(255,255,255,0.25);
+      display: grid; place-items: center;
+      font-size: 22px; font-weight: 800;
+      flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.5);
+      overflow: hidden;
+      background-size: cover; background-position: center;
+    }
+    .id-info { flex: 1; min-width: 0; }
+    .id-name { font-size: 13px; font-weight: 800; line-height: 1.2; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .id-role { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.85; margin-bottom: 5px; }
+    .id-detail { font-size: 9.5px; opacity: 0.92; line-height: 1.35; }
+
+    .id-footer {
+      position: absolute; bottom: 10px; left: 14px; right: 14px;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 8px; z-index: 2;
+    }
+    .qr-box {
+      width: 68px; height: 68px; background: #fff; border-radius: 7px; padding: 4px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15); flex-shrink: 0;
+    }
+    .qr-box canvas, .qr-box img, .qr-box svg { width: 100%; height: 100%; display: block; border-radius: 3px; }
+
+    .qr-meta { display: flex; flex-direction: column; gap: 3px; margin-bottom: 3px; flex: 1; min-width: 0; }
+    .qr-meta .scan-hint { font-size: 7.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.9; }
+    .qr-meta .matric { font-size: 9px; font-family: monospace; font-weight: 700; opacity: 0.95; word-break: break-all; }
+
+    .id-valid { font-size: 8px; text-align: right; opacity: 0.85; flex-shrink: 0; }
+    .id-valid strong { display: block; font-size: 9.5px; font-family: monospace; margin-top: 1px; }
+
+    /* ---------- Print ---------- */
+    @media print {
+      @page { size: A4; margin: 8mm; }
+      body * { visibility: hidden; }
+      .cards-grid, .cards-grid * { visibility: visible; }
+      body { background: #fff !important; }
+      .cards-grid {
+        position: absolute; top: 0; left: 0; right: 0;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6mm;
+      }
+      .id-card {
+        box-shadow: none;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-inside: avoid;
+      }
+      .no-print { display: none !important; }
+    }
+
+    /* Skeleton */
+    .id-card-skeleton {
+      width: 340px; height: 214px; border-radius: 14px;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: sk 1.4s ease-in-out infinite;
+    }
+    @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <div class="page-header no-print">
+          <div>
+            <h1>Batch ID Cards</h1>
+            <p>Generate and print student ID cards by department, programme, or level.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btnReload">↻ Reload</button>
+            <button class="btn btn-primary" id="btnPrint">🖨️ Print All</button>
+          </div>
+        </div>
+
+        <div class="filters no-print">
+          <select class="select" id="deptFilter" style="max-width: 240px;">
+            <option value="">All departments</option>
+          </select>
+          <select class="select" id="programmeFilter" style="max-width: 260px;">
+            <option value="">All programmes</option>
+          </select>
+          <select class="select" id="levelFilter" style="max-width: 160px;">
+            <option value="">All levels</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+          <span id="counter" style="margin-left:auto;font-size:13px;color:var(--ink-3);font-weight:600;"></span>
+        </div>
+
+        <div class="cards-grid" id="cardsGrid">
+          <div class="id-card-skeleton"></div>
+          <div class="id-card-skeleton"></div>
+          <div class="id-card-skeleton"></div>
+          <div class="id-card-skeleton"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc, toast } = window.SACrud;
+
+      const state = {
+        department_id: '',
+        programme_id: '',
+        level: '',
+        items: [],
+      };
+
+      /* ============================================================
+         LOOKUPS
+         ============================================================ */
+      async function loadDepartments() {
+        const { ok, data } = await api('/api/admin/departments');
+        if (!ok) return;
+        $('#deptFilter').innerHTML = '<option value="">All departments</option>' +
+          data.data.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+      }
+
+      async function loadProgrammes(deptId) {
+        if (!deptId) { $('#programmeFilter').innerHTML = '<option value="">All programmes</option>'; return; }
+        const { ok, data } = await api('/api/admin/programmes?department_id=' + deptId);
+        if (!ok) return;
+        $('#programmeFilter').innerHTML = '<option value="">All programmes</option>' +
+          data.data.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+      }
+
+      /* ============================================================
+         LOAD STUDENTS
+         ============================================================ */
+      async function load() {
+        const grid = $('#cardsGrid');
+        grid.innerHTML = Array(4).fill('<div class="id-card-skeleton"></div>').join('');
+
+        const p = new URLSearchParams({ limit: 500 });
+        if (state.department_id) p.set('department_id', state.department_id);
+        if (state.programme_id) p.set('programme_id', state.programme_id);
+        if (state.level) p.set('level', state.level);
+
+        const { ok, data } = await api('/api/admin/students?' + p.toString());
+        if (!ok) {
+          grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px;"><div class="empty-icon">⚠</div><h3>Failed to load students</h3></div>';
+          return;
+        }
+
+        state.items = data.data.items || [];
+        $('#counter').textContent = `${state.items.length} student(s)`;
+
+        if (!state.items.length) {
+          grid.innerHTML = `
+            <div class="empty" style="grid-column:1/-1;padding:40px;">
+              <div class="empty-icon">🎓</div>
+              <h3>No students match your filters</h3>
+              <p>Adjust the filters above and try again.</p>
+            </div>`;
+          return;
+        }
+
+        render();
+      }
+
+      /* ============================================================
+         RENDER CARDS
+         ============================================================ */
+      function render() {
+        const grid = $('#cardsGrid');
+
+        grid.innerHTML = state.items.map(s => {
+          const initials = (s.full_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+          const photoStyle = s.photo_url
+            ? `background-image:url('${s.photo_url}');background-size:cover;background-position:center;color:transparent;`
+            : '';
+          return `
+            <div class="id-card" data-matric="${esc(s.matric_no)}">
+              <div class="id-top">
+                <span class="id-mark">S</span>
+                <span>SMARTACADEMIC</span>
+              </div>
+              <div class="id-body">
+                <div class="id-photo" style="${photoStyle}">${s.photo_url ? '' : initials}</div>
+                <div class="id-info">
+                  <div class="id-name">${esc(s.full_name)}</div>
+                  <div class="id-role">Student</div>
+                  <div class="id-detail">
+                    ${esc(s.department_name || '')}<br>
+                    ${esc(s.programme_name || '')} · Level ${s.level}
+                  </div>
+                </div>
+              </div>
+              <div class="id-footer">
+                <div class="qr-box"><div class="qr-target" data-url="${location.origin}/verify.html?matric=${encodeURIComponent(s.matric_no)}"></div></div>
+                <div class="qr-meta">
+                  <div class="scan-hint">📱 Scan to verify</div>
+                  <div class="matric">${esc(s.matric_no)}</div>
+                </div>
+                <div class="id-valid">
+                  <span>Valid From</span>
+                  <strong>${new Date().toLocaleDateString()}</strong>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+        // Render QR codes
+        if (typeof QRCode === 'undefined') {
+          console.warn('[id-cards-batch] QRCode library not loaded');
+          return;
+        }
+        grid.querySelectorAll('.qr-target').forEach(el => {
+          try {
+            new QRCode(el, {
+              text: el.dataset.url,
+              width: 120,
+              height: 120,
+              colorDark: '#000000',
+              colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.H,
+            });
+            const img = el.querySelector('img, canvas');
+            if (img) {
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.display = 'block';
+            }
+          } catch (err) {
+            console.warn('[qr]', err);
+          }
+        });
+      }
+
+      /* ============================================================
+         BIND
+         ============================================================ */
+      function bind() {
+        $('#deptFilter').addEventListener('change', async (e) => {
+          state.department_id = e.target.value;
+          state.programme_id = '';
+          await loadProgrammes(state.department_id);
+          load();
+        });
+
+        $('#programmeFilter').addEventListener('change', (e) => {
+          state.programme_id = e.target.value;
+          load();
+        });
+
+        $('#levelFilter').addEventListener('change', (e) => {
+          state.level = e.target.value;
+          load();
+        });
+
+        $('#btnReset').addEventListener('click', () => {
+          state.department_id = '';
+          state.programme_id = '';
+          state.level = '';
+          $('#deptFilter').value = '';
+          $('#programmeFilter').innerHTML = '<option value="">All programmes</option>';
+          $('#levelFilter').value = '';
+          load();
+        });
+
+        $('#btnReload').addEventListener('click', load);
+        $('#btnPrint').addEventListener('click', () => window.print());
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      async function boot() {
+        if (window.__batchIdBooted) return;
+        window.__batchIdBooted = true;
+        await loadDepartments();
+        bind();
+        load();
+      }
+
+      document.addEventListener('sa:layout-ready', boot);
+      setTimeout(boot, 1000);
+    })();
+  </script>
+</body>
+</html>

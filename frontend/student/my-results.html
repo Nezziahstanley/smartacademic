@@ -15,12 +15,32 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
-        <div class="page-header"><div><h1>My Results</h1><p>All published results.</p></div></div>
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr><th>Course</th><th>Units</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th><th>Point</th><th>Session</th></tr></thead>
-            <tbody id="tbody"><tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
-          </table>
+        <div class="page-header">
+          <div><h1>My Results</h1><p>All published results and semester GPA summary.</p></div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header"><div><h3>GPA per Semester</h3><p>Running CGPA across all terms</p></div></div>
+          <div id="gpaSummary">
+            <div class="skeleton" style="height:60px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><h3>All Results</h3></div></div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Course</th><th>Units</th><th>CA</th><th>Exam</th>
+                  <th>Total</th><th>Grade</th><th>Point</th><th>Session</th>
+                </tr>
+              </thead>
+              <tbody id="tbody">
+                <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
     </div>
@@ -28,26 +48,6 @@
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script>
-    document.addEventListener('sa:layout-ready', async () => {
-      const { api, esc } = window.SACrud;
-      const { ok, data } = await api('/api/student/results');
-      if (!ok) return;
-      const body = document.getElementById('tbody');
-      if (!data.data.length) { body.innerHTML = '<tr><td colspan="8"><div class="empty" style="padding:40px;"><div class="empty-icon">📈</div><h3>No published results yet</h3></div></td></tr>'; return; }
-      const gradeBadge = g => ({ A: 'badge-green', B: 'badge-blue', C: 'badge-blue', D: 'badge-yellow', E: 'badge-yellow', F: 'badge-red' }[g] || 'badge-gray');
-      body.innerHTML = data.data.map(r => `
-        <tr>
-          <td><strong>${esc(r.code)}</strong> ${esc(r.title)}</td>
-          <td>${r.units}</td>
-          <td>${parseFloat(r.ca_score || 0).toFixed(1)}</td>
-          <td>${parseFloat(r.exam_score || 0).toFixed(1)}</td>
-          <td><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
-          <td><span class="badge ${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
-          <td>${parseFloat(r.grade_point || 0).toFixed(1)}</td>
-          <td>${esc(r.session_name)} ${esc(r.semester_name)}</td>
-        </tr>`).join('');
-    });
-  </script>
+  <script src="/js/student/my-results.js"></script>
 </body>
 </html>

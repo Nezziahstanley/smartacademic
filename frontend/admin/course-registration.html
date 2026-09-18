@@ -9,33 +9,17 @@
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
   <style>
-    .checkbox-cell {
-      width: 40px;
-      text-align: center;
-    }
+    .checkbox-cell { width: 40px; text-align: center; }
     .checkbox-cell input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: var(--primary);
+      width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary);
     }
     .bulk-bar {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 18px;
+      display: none; align-items: center; gap: 12px; padding: 12px 18px;
       background: linear-gradient(135deg, #eef2ff, #ecfeff);
-      border: 1px solid #c7d2fe;
-      border-radius: 12px;
-      margin-bottom: 16px;
+      border: 1px solid #c7d2fe; border-radius: 12px; margin-bottom: 16px;
     }
     .bulk-bar.active { display: flex; }
-    .bulk-bar .bulk-info {
-      flex: 1;
-      font-size: 14px;
-      color: #3730a3;
-      font-weight: 600;
-    }
+    .bulk-bar .bulk-info { flex: 1; font-size: 14px; color: #3730a3; font-weight: 600; }
     .bulk-bar .bulk-info strong { color: #312e81; }
   </style>
 </head>
@@ -57,7 +41,6 @@
           </div>
         </div>
 
-        <!-- Filters -->
         <div class="filters">
           <select class="select" id="sessionFilter" style="max-width:180px;"><option value="">All sessions</option></select>
           <select class="select" id="semFilter" style="max-width:160px;"><option value="">All semesters</option></select>
@@ -72,7 +55,6 @@
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <!-- Bulk action bar (appears when rows are selected) -->
         <div class="bulk-bar" id="bulkBar">
           <div class="bulk-info">
             <strong id="bulkCount">0</strong> selected
@@ -126,7 +108,7 @@
         status: '',
         search: '',
         items: [],
-        selected: new Set(), // set of registration IDs
+        selected: new Set(),
       };
 
       /* ============================================================
@@ -160,7 +142,7 @@
       }
 
       /* ============================================================
-         LOAD REGISTRATIONS
+         LOAD
          ============================================================ */
       async function load() {
         $('#tbody').innerHTML = '<tr><td colspan="9"><div class="skeleton" style="height:22px;"></div></td></tr>';
@@ -184,7 +166,7 @@
       }
 
       /* ============================================================
-         RENDER TABLE
+         RENDER
          ============================================================ */
       function render() {
         const body = $('#tbody');
@@ -207,21 +189,17 @@
         }[s] || 'badge-gray');
 
         body.innerHTML = state.items.map(r => {
-          // Direct actions based on status
           let actions = '';
           if (r.status === 'registered') {
             actions = `
               <button class="btn btn-primary btn-sm" data-approve="${r.id}" title="Approve">✓ Approve</button>
               <button class="btn btn-danger btn-sm" data-drop="${r.id}" title="Drop">✕ Drop</button>`;
           } else if (r.status === 'approved') {
-            actions = `
-              <button class="btn btn-ghost btn-sm" data-drop="${r.id}" title="Drop">✕ Drop</button>`;
+            actions = `<button class="btn btn-ghost btn-sm" data-drop="${r.id}" title="Drop">✕ Drop</button>`;
           } else if (r.status === 'dropped') {
-            actions = `
-              <button class="btn btn-ghost btn-sm" data-approve="${r.id}" title="Restore">↺ Restore</button>`;
+            actions = `<button class="btn btn-ghost btn-sm" data-approve="${r.id}" title="Restore">↺ Restore</button>`;
           }
 
-          // Checkbox disabled for already-final states? No — allow reselect
           const isChecked = state.selected.has(r.id) ? 'checked' : '';
 
           return `
@@ -242,7 +220,6 @@
             </tr>`;
         }).join('');
 
-        // Wire checkboxes
         body.querySelectorAll('[data-select]').forEach(cb => {
           cb.addEventListener('change', () => {
             const id = parseInt(cb.dataset.select, 10);
@@ -253,7 +230,6 @@
           });
         });
 
-        // Wire action buttons
         body.querySelectorAll('[data-approve]').forEach(b =>
           b.addEventListener('click', () => doApprove(parseInt(b.dataset.approve, 10))));
         body.querySelectorAll('[data-drop]').forEach(b =>
@@ -289,14 +265,13 @@
       }
 
       /* ============================================================
-         BULK ACTIONS
+         BULK + FEEDBACK
          ============================================================ */
       function updateBulkBar() {
         const bar = $('#bulkBar');
         const count = state.selected.size;
         $('#bulkCount').textContent = count;
-        if (count > 0) bar.classList.add('active');
-        else           bar.classList.remove('active');
+        bar.classList.toggle('active', count > 0);
       }
 
       function updateCheckAll() {
@@ -306,6 +281,44 @@
         const anySelected = allIds.some(id => state.selected.has(id));
         checkAll.checked = allSelected;
         checkAll.indeterminate = !allSelected && anySelected;
+      }
+
+      function showBulkResults(action, data) {
+        const succeeded = data.approved || data.dropped || [];
+        const failed    = data.failed || [];
+
+        if (!failed.length) {
+          toast(`✅ ${action}: ${succeeded.length} succeeded`);
+          return;
+        }
+
+        const failRows = failed.map(f =>
+          `<tr>
+             <td>#${f.id}</td>
+             <td style="color:var(--red);">${esc(f.error || 'Unknown error')}</td>
+           </tr>`
+        ).join('');
+
+        openModal({
+          title: `${action} Complete`,
+          subtitle: `${succeeded.length} succeeded · ${failed.length} failed`,
+          confirmText: 'Close',
+          body: `
+            <div class="msg msg-success show" style="margin-bottom:14px;">
+              ✅ <strong>${succeeded.length}</strong> registration(s) processed successfully.
+            </div>
+            <div class="msg msg-error show" style="margin-bottom:14px;">
+              ⚠ <strong>${failed.length}</strong> failed:
+            </div>
+            <div class="table-wrap" style="box-shadow:none;max-height:280px;overflow-y:auto;">
+              <table class="table">
+                <thead><tr><th>Registration ID</th><th>Reason</th></tr></thead>
+                <tbody>${failRows}</tbody>
+              </table>
+            </div>
+          `,
+          onConfirm: (_b, close) => close(),
+        });
       }
 
       async function bulkApprove() {
@@ -318,13 +331,13 @@
           confirmText: 'Approve All',
           body: `<p>All selected registrations will be marked <strong>approved</strong>.</p>`,
           onConfirm: async (_b, close) => {
-            let success = 0, fail = 0;
-            for (const id of ids) {
-              const { ok } = await api('/api/admin/registrations/' + id + '/approve', { method: 'POST' });
-              if (ok) success++; else fail++;
-            }
+            const { ok, data } = await api('/api/admin/registrations/bulk-approve', {
+              method: 'POST',
+              body: JSON.stringify({ ids }),
+            });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
             close();
-            toast(`✅ Approved: ${success}${fail ? ', failed: ' + fail : ''}`);
+            showBulkResults('Approval', data.data);
             load();
           },
         });
@@ -340,44 +353,38 @@
           confirmText: 'Drop All',
           body: `<p style="color:var(--red);">This will <strong>drop</strong> all selected registrations. Students will need to re-register.</p>`,
           onConfirm: async (_b, close) => {
-            let success = 0, fail = 0;
-            for (const id of ids) {
-              const { ok } = await api('/api/admin/registrations/' + id + '/drop', { method: 'POST' });
-              if (ok) success++; else fail++;
-            }
+            const { ok, data } = await api('/api/admin/registrations/bulk-drop', {
+              method: 'POST',
+              body: JSON.stringify({ ids }),
+            });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
             close();
-            toast(`Dropped: ${success}${fail ? ', failed: ' + fail : ''}`);
+            showBulkResults('Drop', data.data);
             load();
           },
         });
       }
 
       async function approveAllFiltered() {
-        // Approve every 'registered' registration currently loaded
         const ids = state.items.filter(r => r.status === 'registered').map(r => r.id);
-        if (!ids.length) {
-          toast('No "registered" rows to approve');
-          return;
-        }
+        if (!ids.length) { toast('No "registered" rows to approve'); return; }
 
         openModal({
           title: 'Approve all filtered registrations?',
           size: 'sm',
           confirmText: 'Approve ' + ids.length,
           body: `
-            <p>This will approve <strong>${ids.length}</strong> registration(s) that are currently <code>registered</code>.</p>
-            <p style="font-size:13px;color:var(--ink-3);margin-top:8px;">
-              Rows already approved or dropped are skipped.
-            </p>
+            <p>This will approve <strong>${ids.length}</strong> registration(s).</p>
+            <p style="font-size:13px;color:var(--ink-3);margin-top:8px;">Rows already approved or dropped are skipped.</p>
           `,
           onConfirm: async (_b, close) => {
-            let success = 0, fail = 0;
-            for (const id of ids) {
-              const { ok } = await api('/api/admin/registrations/' + id + '/approve', { method: 'POST' });
-              if (ok) success++; else fail++;
-            }
+            const { ok, data } = await api('/api/admin/registrations/bulk-approve', {
+              method: 'POST',
+              body: JSON.stringify({ ids }),
+            });
+            if (!ok) { alert(data?.error || 'Failed'); return; }
             close();
-            toast(`✅ Approved: ${success}${fail ? ', failed: ' + fail : ''}`);
+            showBulkResults('Approval', data.data);
             load();
           },
         });
@@ -416,21 +423,16 @@
           load();
         });
 
-        // Select all checkbox
         $('#checkAll').addEventListener('change', (e) => {
-          if (e.target.checked) {
-            state.items.forEach(r => state.selected.add(r.id));
-          } else {
-            state.selected.clear();
-          }
-          // Update row checkboxes
+          if (e.target.checked) state.items.forEach(r => state.selected.add(r.id));
+          else                  state.selected.clear();
+
           $('#tbody').querySelectorAll('[data-select]').forEach(cb => {
             cb.checked = state.selected.has(parseInt(cb.dataset.select, 10));
           });
           updateBulkBar();
         });
 
-        // Bulk buttons
         $('#btnBulkApprove').addEventListener('click', bulkApprove);
         $('#btnBulkDrop').addEventListener('click', bulkDrop);
         $('#btnBulkClear').addEventListener('click', () => {
@@ -439,8 +441,6 @@
           updateBulkBar();
           updateCheckAll();
         });
-
-        // Approve all filtered
         $('#btnApproveAllFiltered').addEventListener('click', approveAllFiltered);
       }
 
