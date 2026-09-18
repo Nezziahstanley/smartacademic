@@ -1,12 +1,14 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Lecturer Controller
 // All data scoped to courses taught by the logged-in lecturer.
+// Includes audit logging on every mutating action.
 // ============================================================
 
 'use strict';
 
 const db = require('../config/db');
 const { AppError } = require('../middleware/errorHandler');
+const adminModel = require('../models/adminModel');
 
 /* ============================================================
    HELPERS
@@ -121,7 +123,6 @@ async function listStudents(req, res, next) {
 
     if (course_id) {
       const cid = parseInt(course_id, 10);
-      // Verify ownership upfront
       await assertCourseOwnership(lecturerId, cid);
       params.push(cid);
       where.push(`c.id = $${params.length}`);
@@ -194,7 +195,6 @@ async function getStudentDetail(req, res, next) {
     const { id: lecturerId } = await getLecturerId(req.user.id);
     const studentId = parseInt(req.params.id, 10);
 
-    // 1. Confirm the student is in at least one of this lecturer's courses
     const belongs = await db.query(`
       SELECT 1
         FROM course_registrations cr
@@ -208,7 +208,6 @@ async function getStudentDetail(req, res, next) {
       throw new AppError('Student is not registered in any of your courses.', 403);
     }
 
-    // 2. Basic info
     const student = await db.query(`
       SELECT s.id, s.matric_no, s.level, s.admission_year,
              u.full_name, u.email, u.phone, u.photo_url
@@ -217,7 +216,6 @@ async function getStudentDetail(req, res, next) {
        WHERE s.id = $1
     `, [studentId]);
 
-    // 3. Aggregate attendance (scoped to this lecturer's courses)
     const attendance = await db.query(`
       SELECT
         COUNT(*)::int                                              AS total,
@@ -235,7 +233,6 @@ async function getStudentDetail(req, res, next) {
          AND c.lecturer_id = $2
     `, [studentId, lecturerId]);
 
-    // 4. Attendance per course (scoped)
     const attendanceByCourse = await db.query(`
       SELECT c.id AS course_id, c.code, c.title,
              COUNT(*)::int                                            AS total,
@@ -255,7 +252,6 @@ async function getStudentDetail(req, res, next) {
        ORDER BY c.code
     `, [studentId, lecturerId]);
 
-    // 5. Latest risk snapshot (institution-wide, but labelled clearly)
     const risk = await db.query(`
       SELECT risk_score, risk_category, attendance_pct, ca_avg, exam_avg,
              failed_courses, gpa, cgpa, factors, assessed_at
@@ -265,7 +261,6 @@ async function getStudentDetail(req, res, next) {
        LIMIT 1
     `, [studentId]);
 
-    // 6. Results (scoped to this lecturer's courses only)
     const results = await db.query(`
       SELECT r.id, r.total_score, r.grade, r.grade_point,
              r.ca_score, r.exam_score, r.is_published, r.computed_at,
@@ -280,7 +275,6 @@ async function getStudentDetail(req, res, next) {
        ORDER BY r.computed_at DESC
     `, [studentId, lecturerId]);
 
-    // 7. Registrations in this lecturer's courses
     const registrations = await db.query(`
       SELECT cr.id, cr.status, cr.registered_at,
              c.id AS course_id, c.code, c.title, c.units, c.level, c.semester_name
@@ -337,6 +331,15 @@ async function createClassSession(req, res, next) {
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id
     `, [course_id, session_date, start_time || null, end_time || null, topic || null, req.user.id]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'create_class_session',
+      module: 'attendance',
+      affected_record: `class_session:${r.rows[0].id}`,
+      details: { course_id, session_date, topic },
+      ip_address: req.ip,
+    });
 
     res.status(201).json({ success: true, data: r.rows[0] });
   } catch (err) { next(err); }
@@ -413,6 +416,15 @@ async function saveAttendance(req, res, next) {
       client.release();
     }
 
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'save_attendance',
+      module: 'attendance',
+      affected_record: `class_session:${classSessionId}`,
+      details: { records: records.length },
+      ip_address: req.ip,
+    });
+
     res.json({ success: true, message: 'Attendance saved.' });
   } catch (err) { next(err); }
 }
@@ -482,6 +494,15 @@ async function createAssessment(req, res, next) {
       RETURNING id
     `, [course_id, type, title, max_score, weight || 0, due_date || null, req.user.id]);
 
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'create_assessment',
+      module: 'assessments',
+      affected_record: `assessment:${r.rows[0].id}`,
+      details: { course_id, type, title, max_score },
+      ip_address: req.ip,
+    });
+
     res.status(201).json({ success: true, data: r.rows[0] });
   } catch (err) { next(err); }
 }
@@ -497,6 +518,15 @@ async function deleteAssessment(req, res, next) {
     `, [id, lecturerId]);
     if (!owns.rows[0]) throw new AppError('Not found.', 404);
     await db.query('DELETE FROM assessments WHERE id = $1', [id]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'delete_assessment',
+      module: 'assessments',
+      affected_record: `assessment:${id}`,
+      ip_address: req.ip,
+    });
+
     res.json({ success: true });
   } catch (err) { next(err); }
 }
@@ -575,6 +605,15 @@ async function saveScores(req, res, next) {
     } finally {
       client.release();
     }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'save_scores',
+      module: 'assessments',
+      affected_record: `assessment:${id}`,
+      details: { students: scores.length },
+      ip_address: req.ip,
+    });
 
     res.json({ success: true, message: 'Scores saved.' });
   } catch (err) { next(err); }
@@ -803,6 +842,15 @@ async function interveneAtRisk(req, res, next) {
       `, [st.rows[0].user_id, `Your lecturer created: ${title}`, r.rows[0].id]);
     }
 
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'create_intervention',
+      module: 'interventions',
+      affected_record: `intervention:${r.rows[0].id}`,
+      details: { student_id: studentId, type, priority },
+      ip_address: req.ip,
+    });
+
     res.status(201).json({ success: true, data: r.rows[0] });
   } catch (err) { next(err); }
 }
@@ -849,10 +897,14 @@ async function reportToHod(req, res, next) {
       studentId,
     ]);
 
-    await db.query(`
-      INSERT INTO audit_logs (user_id, action, module, affected_record, details)
-      VALUES ($1, 'report_to_hod', 'risk', $2, $3)
-    `, [req.user.id, `student:${studentId}`, JSON.stringify({ message })]);
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'report_to_hod',
+      module: 'risk',
+      affected_record: `student:${studentId}`,
+      details: { message },
+      ip_address: req.ip,
+    });
 
     res.json({ success: true, message: 'Reported to HOD.' });
   } catch (err) { next(err); }
@@ -895,6 +947,16 @@ async function updateIntervention(req, res, next) {
         END
        WHERE id = $1
     `, [id, status, notes]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'update_intervention',
+      module: 'interventions',
+      affected_record: `intervention:${id}`,
+      details: { status },
+      ip_address: req.ip,
+    });
+
     res.json({ success: true });
   } catch (err) { next(err); }
 }
@@ -1018,6 +1080,14 @@ async function broadcastToStudents(req, res, next) {
       sent++;
     }
 
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'broadcast_students',
+      module: 'notifications',
+      details: { count: sent, title },
+      ip_address: req.ip,
+    });
+
     res.json({ success: true, message: `Sent to ${sent} students.`, count: sent });
   } catch (err) { next(err); }
 }
@@ -1054,6 +1124,13 @@ async function changePassword(req, res, next) {
 
     const hash = await bcrypt.hash(new_password, env.BCRYPT_ROUNDS);
     await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, hash]);
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'change_password',
+      module: 'profile',
+      ip_address: req.ip,
+    });
 
     res.json({ success: true, message: 'Password changed.' });
   } catch (err) { next(err); }
@@ -1138,6 +1215,15 @@ async function submitResultsToHod(req, res, next) {
       ]);
     }
 
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'submit_results',
+      module: 'results',
+      affected_record: `course:${courseId}`,
+      details: { session_id, semester_id, students: results.rows.length },
+      ip_address: req.ip,
+    });
+
     res.json({
       success: true,
       message: `Results submitted to HOD (${results.rows.length} student records).`,
@@ -1198,6 +1284,18 @@ async function submitResultsBulk(req, res, next) {
         ]);
       }
     }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'submit_results_bulk',
+      module: 'results',
+      details: {
+        courses: submittedCourses.length,
+        students: totalSubmitted,
+        session_id, semester_id,
+      },
+      ip_address: req.ip,
+    });
 
     res.json({
       success: true,

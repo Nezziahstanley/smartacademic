@@ -8,6 +8,22 @@
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .pill {
+      padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+      border: 1px solid var(--border); background: #fff; color: var(--ink-3);
+      cursor: pointer; transition: .15s;
+    }
+    .pill:hover { border-color: var(--primary); color: var(--primary); }
+    .pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .pill .cnt {
+      display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+      background: rgba(255,255,255,.25); font-size: 11px;
+    }
+    .pill.active .cnt { background: rgba(255,255,255,.35); }
+    .pill:not(.active) .cnt { background: var(--bg-3); color: var(--ink-3); }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -15,24 +31,39 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
+
         <div class="page-header">
-          <div><h1>Attendance</h1><p>Record and manage class attendance.</p></div>
+          <div><h1>Attendance</h1><p>Record and manage class attendance for your courses.</p></div>
           <div class="page-actions">
-            <button class="btn btn-primary" id="btnNewSession">+ New Class Session</button>
+            <button class="btn btn-ghost" id="btnExport" disabled>📊 Export Excel</button>
+            <button class="btn btn-primary" id="btnNewSession" disabled>+ New Class Session</button>
           </div>
         </div>
 
+        <!-- Filters -->
         <div class="filters">
-          <select class="select" id="courseFilter" style="max-width:320px;"><option value="">Select course</option></select>
+          <select class="select" id="courseFilter" style="max-width: 320px;">
+            <option value="">Select course…</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
+        </div>
+
+        <!-- Session status pills -->
+        <div class="pill-row" id="statusPills" style="display:none;">
+          <button class="pill active" data-status="all">All <span class="cnt" id="cAll">0</span></button>
+          <button class="pill" data-status="complete">✓ Recorded <span class="cnt" id="cComplete">0</span></button>
+          <button class="pill" data-status="partial">⏳ Partial <span class="cnt" id="cPartial">0</span></button>
+          <button class="pill" data-status="empty">○ Empty <span class="cnt" id="cEmpty">0</span></button>
         </div>
 
         <div id="sessionsWrap">
           <div class="empty" style="padding:60px 20px;">
             <div class="empty-icon">📅</div>
             <h3>Select a course</h3>
-            <p>Choose a course to view or record attendance.</p>
+            <p>Choose one of your courses to view or record attendance.</p>
           </div>
         </div>
+
       </main>
     </div>
   </div>

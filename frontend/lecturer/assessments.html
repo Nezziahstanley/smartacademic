@@ -3,34 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Assessments — SMARTACADEMIC Lecturer</title>
+  <title>Assessments — Lecturer</title>
   <link rel="stylesheet" href="/css/layout.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <style>
+    .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .pill {
+      padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+      border: 1px solid var(--border); background: #fff; color: var(--ink-3);
+      cursor: pointer; transition: .15s;
+    }
+    .pill:hover { border-color: var(--primary); color: var(--primary); }
+    .pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  </style>
 </head>
 <body>
-
   <div class="app-shell">
     <div id="sidebarSlot"></div>
-
     <div class="main">
       <div id="topbarSlot"></div>
-
       <main class="page">
 
-        <!-- ============ PAGE HEADER ============ -->
         <div class="page-header">
-          <div>
-            <h1>Assessments</h1>
-            <p>Create assessments and enter student scores.</p>
-          </div>
+          <div><h1>Assessments</h1><p>Create assessments and enter student scores.</p></div>
           <div class="page-actions">
+            <button class="btn btn-ghost" id="btnExport" disabled>📊 Export Excel</button>
             <button class="btn btn-primary" id="btnNew">+ New Assessment</button>
           </div>
         </div>
 
-        <!-- ============ FILTERS ============ -->
         <div class="filters">
           <select class="select" id="courseFilter" style="max-width: 320px;">
             <option value="">All my courses</option>
@@ -45,7 +48,6 @@
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
-        <!-- ============ ASSESSMENTS TABLE ============ -->
         <div class="table-wrap">
           <table class="table">
             <thead>
@@ -62,8 +64,6 @@
             </thead>
             <tbody id="tbody">
               <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
-              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
-              <tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -72,324 +72,11 @@
     </div>
   </div>
 
-  <!-- ============ MODAL CONTAINER ============ -->
   <div id="modalRoot"></div>
 
-  <!-- ============ SCRIPTS ============ -->
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script>
-    'use strict';
-    (function () {
-      const { $, api, esc, openModal, confirmDelete, toast } = window.SACrud;
-
-      const state = {
-        course_id: new URLSearchParams(location.search).get('course') || '',
-        type: '',
-        courses: [],
-      };
-
-      const TYPE_LABELS = {
-        assignment: 'Assignment',
-        test: 'Test',
-        ca: 'CA',
-        exam: 'Exam',
-      };
-
-      const TYPE_BADGE = {
-        assignment: 'badge-blue',
-        test: 'badge-yellow',
-        ca: 'badge-orange',
-        exam: 'badge-red',
-      };
-
-      /* ============================================================
-         LOAD COURSES
-         ============================================================ */
-      async function loadCourses() {
-        const { ok, data } = await api('/api/lecturer/courses');
-        if (!ok) return;
-        state.courses = data.data;
-
-        $('#courseFilter').innerHTML =
-          '<option value="">All my courses</option>' +
-          state.courses.map(c =>
-            `<option value="${c.id}" ${String(c.id) === state.course_id ? 'selected' : ''}>${esc(c.code)} — ${esc(c.title)}</option>`
-          ).join('');
-      }
-
-      /* ============================================================
-         LOAD ASSESSMENTS
-         ============================================================ */
-      async function load() {
-        $('#tbody').innerHTML =
-          '<tr><td colspan="8"><div class="skeleton" style="height:22px;"></div></td></tr>';
-
-        const p = new URLSearchParams();
-        if (state.course_id) p.set('course_id', state.course_id);
-
-        const { ok, data } = await api('/api/lecturer/assessments?' + p.toString());
-        if (!ok) {
-          $('#tbody').innerHTML =
-            '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--red);">Failed to load.</td></tr>';
-          return;
-        }
-
-        let items = data.data || [];
-        if (state.type) items = items.filter(a => a.type === state.type);
-
-        if (!items.length) {
-          $('#tbody').innerHTML = `
-            <tr><td colspan="8">
-              <div class="empty" style="padding:40px;">
-                <div class="empty-icon">📝</div>
-                <h3>No assessments yet</h3>
-                <p>Click "+ New Assessment" to create one.</p>
-              </div>
-            </td></tr>`;
-          return;
-        }
-
-        $('#tbody').innerHTML = items.map(a => `
-          <tr>
-            <td><strong>${esc(a.course_code)}</strong></td>
-            <td><span class="badge ${TYPE_BADGE[a.type] || 'badge-gray'}">${esc(TYPE_LABELS[a.type] || a.type)}</span></td>
-            <td>${esc(a.title)}</td>
-            <td>${a.max_score}</td>
-            <td>${a.weight || 0}%</td>
-            <td>${a.scored || 0}</td>
-            <td>${a.due_date ? new Date(a.due_date).toLocaleDateString() : '—'}</td>
-            <td>
-              <div class="actions">
-                <button class="btn btn-primary btn-sm" data-scores="${a.id}">Enter Scores</button>
-                <button class="btn btn-ghost btn-sm" data-del="${a.id}">Delete</button>
-              </div>
-            </td>
-          </tr>`).join('');
-
-        $('#tbody').querySelectorAll('[data-scores]').forEach(b =>
-          b.addEventListener('click', () => openScores(parseInt(b.dataset.scores, 10))));
-        $('#tbody').querySelectorAll('[data-del]').forEach(b =>
-          b.addEventListener('click', () => delAssessment(parseInt(b.dataset.del, 10))));
-      }
-
-      /* ============================================================
-         CREATE ASSESSMENT
-         ============================================================ */
-      function openCreate() {
-        if (!state.courses.length) {
-          alert('You have no courses to add assessments to.');
-          return;
-        }
-
-        openModal({
-          title: 'New Assessment',
-          subtitle: 'Create an assignment, test, CA, or exam',
-          confirmText: 'Create',
-          body: `
-            <div class="field">
-              <label>Course *</label>
-              <select class="select" id="f_course">
-                ${state.courses.map(c =>
-                  `<option value="${c.id}" ${String(c.id) === state.course_id ? 'selected' : ''}>${esc(c.code)} — ${esc(c.title)}</option>`
-                ).join('')}
-              </select>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Type *</label>
-                <select class="select" id="f_type">
-                  <option value="assignment">Assignment</option>
-                  <option value="test">Test</option>
-                  <option value="ca">CA</option>
-                  <option value="exam">Exam</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Max Score *</label>
-                <input class="input" id="f_max" type="number" value="30" min="1" max="100" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Title *</label>
-              <input class="input" id="f_title" placeholder="e.g. CA 1" />
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Weight (%)</label>
-                <input class="input" id="f_weight" type="number" value="15" min="0" max="100" />
-              </div>
-              <div class="field">
-                <label>Due Date</label>
-                <input class="input" id="f_due" type="date" />
-              </div>
-            </div>
-
-            <p style="font-size:12px;color:var(--ink-3);margin-top:8px;">
-              💡 <strong>Tip:</strong> Total weights for CA (assignments + tests + ca) should sum to 30, and exam to 70.
-            </p>
-          `,
-          onConfirm: async (bd, close) => {
-            const payload = {
-              course_id: parseInt(bd.querySelector('#f_course').value, 10),
-              type: bd.querySelector('#f_type').value,
-              title: bd.querySelector('#f_title').value.trim(),
-              max_score: parseInt(bd.querySelector('#f_max').value, 10),
-              weight: parseInt(bd.querySelector('#f_weight').value, 10) || 0,
-              due_date: bd.querySelector('#f_due').value || null,
-            };
-
-            if (!payload.title) { alert('Title is required.'); return; }
-            if (!payload.max_score || payload.max_score < 1) { alert('Max score must be at least 1.'); return; }
-
-            const { ok, data } = await api('/api/lecturer/assessments', {
-              method: 'POST',
-              body: JSON.stringify(payload),
-            });
-
-            if (!ok) { alert(data?.error || 'Failed to create assessment.'); return; }
-            close();
-            toast('✅ Assessment created');
-            load();
-          },
-        });
-      }
-
-      /* ============================================================
-         ENTER SCORES
-         ============================================================ */
-      async function openScores(assessmentId) {
-        const { ok, data } = await api('/api/lecturer/assessments/' + assessmentId + '/scores');
-        if (!ok) { alert('Failed to load scores.'); return; }
-
-        const { assessment, students } = data.data;
-
-        const rowsHtml = students.map(s => `
-          <tr>
-            <td>
-              <div style="font-weight:600;">${esc(s.full_name)}</div>
-              <div style="font-size:12px;color:var(--ink-3);">${esc(s.matric_no)}</div>
-            </td>
-            <td>
-              <input class="input" type="number" min="0" max="${assessment.max_score}" step="0.1"
-                     data-student="${s.id}"
-                     value="${s.score !== null && s.score !== undefined ? s.score : ''}"
-                     style="max-width:120px;" />
-            </td>
-          </tr>`).join('');
-
-        openModal({
-          title: 'Enter Scores',
-          subtitle: `${assessment.code} — ${assessment.title} (max ${assessment.max_score})`,
-          size: 'lg',
-          confirmText: 'Save Scores',
-          body: `
-            <div class="msg msg-info show" style="margin-bottom:14px;">
-              Leave blank to remove a score. Max is <strong>${assessment.max_score}</strong>.
-            </div>
-            <div class="table-wrap" style="box-shadow:none;max-height:450px;overflow-y:auto;">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th style="width:140px;">Score</th>
-                  </tr>
-                </thead>
-                <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:var(--ink-3);">No students registered for this course.</td></tr>'}</tbody>
-              </table>
-            </div>
-          `,
-          onConfirm: async (bd, close) => {
-            const inputs = bd.querySelectorAll('[data-student]');
-            const scores = [];
-            let hasError = false;
-
-            inputs.forEach(inp => {
-              const val = inp.value === '' ? null : parseFloat(inp.value);
-              if (val !== null && (isNaN(val) || val < 0 || val > assessment.max_score)) {
-                hasError = true;
-                inp.style.borderColor = 'var(--red)';
-              }
-              scores.push({
-                student_id: parseInt(inp.dataset.student, 10),
-                score: val,
-              });
-            });
-
-            if (hasError) {
-              alert('Some scores are invalid. Please check the highlighted fields.');
-              return;
-            }
-
-            const { ok, data } = await api('/api/lecturer/assessments/' + assessmentId + '/scores', {
-              method: 'POST',
-              body: JSON.stringify({ scores }),
-            });
-
-            if (!ok) { alert(data?.error || 'Failed to save scores.'); return; }
-            close();
-            toast('✅ Scores saved');
-            load();
-          },
-        });
-      }
-
-      /* ============================================================
-         DELETE ASSESSMENT
-         ============================================================ */
-      function delAssessment(id) {
-        confirmDelete({
-          title: 'Delete assessment?',
-          message: 'All scores for this assessment will also be deleted. This cannot be undone.',
-          onConfirm: async () => {
-            const { ok, data } = await api('/api/lecturer/assessments/' + id, { method: 'DELETE' });
-            if (!ok) { alert(data?.error || 'Failed to delete.'); return; }
-            toast('Assessment deleted');
-            load();
-          },
-        });
-      }
-
-      /* ============================================================
-         FILTERS
-         ============================================================ */
-      function bindFilters() {
-        $('#courseFilter').addEventListener('change', e => {
-          state.course_id = e.target.value;
-          load();
-        });
-
-        $('#typeFilter').addEventListener('change', e => {
-          state.type = e.target.value;
-          load();
-        });
-
-        $('#btnReset').addEventListener('click', () => {
-          state.course_id = '';
-          state.type = '';
-          $('#courseFilter').value = '';
-          $('#typeFilter').value = '';
-          load();
-        });
-
-        $('#btnNew').addEventListener('click', openCreate);
-      }
-
-      /* ============================================================
-         BOOT
-         ============================================================ */
-      async function boot() {
-        await loadCourses();
-        bindFilters();
-        load();
-      }
-
-      document.addEventListener('sa:layout-ready', boot);
-    })();
-  </script>
+  <script src="/js/lecturer/assessments.js"></script>
 </body>
 </html>

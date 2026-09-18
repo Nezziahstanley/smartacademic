@@ -11,7 +11,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
-
   <div class="app-shell">
     <div id="sidebarSlot"></div>
     <div class="main">
@@ -30,9 +29,29 @@
           </div>
         </div>
 
-        <div class="card chart-card mb-4">
-          <div class="card-header"><div><h3>Score Distribution</h3><p>Per course average</p></div></div>
-          <div class="chart-wrap"><canvas id="perfChart"></canvas></div>
+        <!-- Charts grid -->
+        <div class="grid-2 mb-4">
+          <div class="card chart-card">
+            <div class="card-header"><div><h3>Average Score by Course</h3><p>Bar chart</p></div></div>
+            <div class="chart-wrap"><canvas id="courseChart"></canvas></div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-header"><div><h3>Grade Distribution</h3><p>Across all your courses</p></div></div>
+            <div class="chart-wrap"><canvas id="gradeChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-4">
+          <div class="card chart-card">
+            <div class="card-header"><div><h3>Student Score Spread</h3><p>Every student, every course — sorted</p></div></div>
+            <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-header"><div><h3>Pass Rate by Course</h3><p>% of students with grade ≥ E</p></div></div>
+            <div class="chart-wrap"><canvas id="passChart"></canvas></div>
+          </div>
         </div>
 
         <div class="card">
@@ -41,11 +60,8 @@
             <table class="table">
               <thead>
                 <tr>
-                  <th>Student</th>
-                  <th>Matric</th>
-                  <th>Course</th>
-                  <th style="text-align:right;">Avg Score</th>
-                  <th style="text-align:right;">Grade</th>
+                  <th>Student</th><th>Matric</th><th>Course</th>
+                  <th style="text-align:right;">Score</th><th style="text-align:right;">Grade</th>
                 </tr>
               </thead>
               <tbody id="studentPerfBody">
@@ -62,72 +78,6 @@
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
   <script src="/js/admin/crud-shared.js"></script>
-  <script>
-    'use strict';
-    (function () {
-      const { $, api, esc } = window.SACrud;
-
-      async function loadCourses() {
-        const { ok, data } = await api('/api/lecturer/courses');
-        if (!ok) return;
-        $('#courseFilter').innerHTML = '<option value="">All courses</option>' +
-          data.data.map(c => `<option value="${c.id}">${esc(c.code)} — ${esc(c.title)}</option>`).join('');
-      }
-
-      async function loadPerformance() {
-        const { ok, data } = await api('/api/lecturer/reports/course-performance');
-        if (!ok) return;
-        const rows = data.data;
-
-        // Table of student averages
-        const studRes = await api('/api/lecturer/reports/student-averages' + ($('#courseFilter').value ? '?course_id=' + $('#courseFilter').value : ''));
-        const body = $('#studentPerfBody');
-        if (studRes.ok && studRes.data.data.length) {
-          const gradeBadge = g => ({ A: 'green', B: 'blue', C: 'blue', D: 'yellow', E: 'yellow', F: 'red' }[g] || 'gray');
-          body.innerHTML = studRes.data.data.slice(0, 100).map(r => `
-            <tr>
-              <td>${esc(r.full_name)}</td>
-              <td>${esc(r.matric_no)}</td>
-              <td>${esc(r.code)}</td>
-              <td style="text-align:right;"><strong>${parseFloat(r.total_score || 0).toFixed(1)}</strong></td>
-              <td style="text-align:right;"><span class="badge badge-${gradeBadge(r.grade)}">${esc(r.grade || '—')}</span></td>
-            </tr>`).join('');
-        } else {
-          body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--ink-3);">No results yet.</td></tr>';
-        }
-
-        // Chart
-        const canvas = $('#perfChart');
-        if (!canvas || typeof Chart === 'undefined') return;
-        if (!rows.length) {
-          canvas.parentElement.innerHTML = '<div class="empty" style="padding:40px;"><div class="empty-icon">📊</div><h3>No data yet</h3></div>';
-          return;
-        }
-        new Chart(canvas, {
-          type: 'bar',
-          data: {
-            labels: rows.map(r => r.code),
-            datasets: [{
-              label: 'Avg Score',
-              data: rows.map(r => parseFloat(r.avg_score) || 0),
-              backgroundColor: '#166534',
-              borderRadius: 8,
-            }],
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } },
-            plugins: { legend: { display: false } },
-          },
-        });
-      }
-
-      document.addEventListener('sa:layout-ready', () => {
-        loadCourses();
-        loadPerformance();
-        $('#courseFilter').addEventListener('change', loadPerformance);
-      });
-    })();
-  </script>
+  <script src="/js/lecturer/performance.js"></script>
 </body>
 </html>

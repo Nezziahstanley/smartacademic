@@ -1,8 +1,8 @@
 // ============================================================
 // SMARTACADEMIC — Topbar + Component Loader
 // Loads sidebar.html and topbar.html into the page, hydrates
-// user info (including profile photo), wires notifications,
-// profile menu, and Help & Support modal.
+// user info (including profile photo), wires notifications
+// with deep-link navigation, profile menu, and Help & Support.
 // Enforces authentication on every dashboard page.
 // ============================================================
 
@@ -36,7 +36,6 @@
     return;
   }
 
-  // Stamp role on body for CSS-driven sidebar menus
   document.body.dataset.role = role;
 
   let currentUser = null;
@@ -97,8 +96,10 @@
       const time = formatRelativeTime(n.created_at);
       const typeCls = n.type || 'system';
       const icon = typeIcon(typeCls);
+      const link = n.link ? `data-link="${escapeHtml(n.link)}"` : '';
+      const clickable = n.link ? 'style="cursor:pointer;"' : '';
       return `
-        <div class="np-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}">
+        <div class="np-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}" ${link} ${clickable}>
           <div class="np-ico ${typeCls}">${icon}</div>
           <div class="np-body">
             <strong>${escapeHtml(n.title)}</strong>
@@ -111,14 +112,28 @@
     list.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', async () => {
         const id = parseInt(el.dataset.id, 10);
-        if (!el.classList.contains('unread')) return;
-        try {
-          await fetch('/api/notifications/' + id + '/read', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token },
-          });
-          el.classList.remove('unread');
-        } catch { /* ignore */ }
+        const link = el.dataset.link;
+
+        // Mark read first (best effort)
+        if (el.classList.contains('unread')) {
+          try {
+            await fetch('/api/notifications/' + id + '/read', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + token },
+            });
+            el.classList.remove('unread');
+            // Decrement badge
+            const badge = document.querySelector('.tb-badge[data-notif-badge]');
+            if (badge) {
+              const n = Math.max(0, parseInt(badge.dataset.count || '0', 10) - 1);
+              badge.textContent = n > 0 ? n : '';
+              badge.dataset.count = n;
+            }
+          } catch { /* ignore */ }
+        }
+
+        // Navigate if there's a deep-link
+        if (link) window.location.href = link;
       });
     });
   }
@@ -162,7 +177,7 @@
     const name = user.full_name || 'User';
     const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
-    // ---------- Avatar (photo OR initials) ----------
+    // Avatar (photo OR initials)
     $$('[data-user-avatar]').forEach(el => {
       if (user.photo_url) {
         el.textContent = '';
@@ -177,12 +192,10 @@
       }
     });
 
-    // ---------- Name / Role / Email ----------
     $$('[data-user-name]').forEach(el => el.textContent = name);
     $$('[data-user-role]').forEach(el => el.textContent = ROLE_LABELS[user.role_name] || user.role_name);
     $$('[data-user-email]').forEach(el => el.textContent = user.email);
 
-    // ---------- Sidebar role pill ----------
     const sbRole = $('[data-sidebar-role]');
     if (sbRole) sbRole.textContent = ROLE_LABELS[user.role_name] || user.role_name;
   }
@@ -206,7 +219,6 @@
       if (!profile.contains(e.target)) profile.classList.remove('open');
     });
 
-    // Role base path
     const base =
       role === 'admin'    ? '/admin' :
       role === 'hod'      ? '/hod' :
@@ -229,7 +241,6 @@
       }
     }
 
-    // Help & Support — Student gets their support page, others get modal
     if (helpLink) {
       if (role === 'student') {
         helpLink.setAttribute('href', '/student/support.html');
@@ -244,7 +255,6 @@
       }
     }
 
-    // Close dropdown after clicking any item (except logout/help)
     profile.querySelectorAll('.pm-item').forEach(item => {
       if (item.hasAttribute('data-logout')) return;
       if (item === helpLink) return;
@@ -384,13 +394,11 @@
      8. BOOTSTRAP
      ============================================================ */
   async function boot() {
-    // Load components in parallel
     await Promise.all([
       injectComponent('sidebarSlot', '/components/sidebar.html'),
       injectComponent('topbarSlot',  '/components/topbar.html'),
     ]);
 
-    // Load fresh user from server
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: 'Bearer ' + token },
@@ -404,8 +412,6 @@
       }
       const json = await res.json();
       hydrateUser(json.data.user);
-
-      // Cache for offline fallback
       localStorage.setItem(STORAGE.USER, JSON.stringify(json.data.user));
     } catch {
       const cached = localStorage.getItem(STORAGE.USER);
@@ -414,18 +420,14 @@
       }
     }
 
-    // Initialize sidebar behaviors
     if (window.Sidebar) window.Sidebar.init();
 
-    // Wire topbar interactions
     wireProfileMenu();
     wireNotifications();
 
-    // Notify the page that layout is ready
     document.dispatchEvent(new CustomEvent('sa:layout-ready'));
   }
 
-  // Expose for pages that need current user
   window.AuthContext = {
     get token() { return localStorage.getItem(STORAGE.TOKEN); },
     get role()  { return localStorage.getItem(STORAGE.ROLE); },

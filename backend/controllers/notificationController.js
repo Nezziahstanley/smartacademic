@@ -1,6 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Notification Controller
 // Any authenticated user can view/update their own notifications.
+// Each notification carries a role-aware "link" for deep-linking.
 // ============================================================
 
 'use strict';
@@ -8,6 +9,58 @@
 const db = require('../config/db');
 const { AppError } = require('../middleware/errorHandler');
 
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+/**
+ * Turn a notification row into a URL the frontend can navigate to.
+ * Role-aware and type-aware.
+ */
+function buildNotificationLink(n, roleName, base) {
+  // --- Result published ---
+  if (n.type === 'result') {
+    if (roleName === 'student')  return '/student/my-results.html';
+    if (roleName === 'lecturer') return `${base}/results.html`;
+    if (roleName === 'hod')      return `${base}/result-submissions.html`;
+    return `${base}/publish-results.html`;
+  }
+
+  // --- Risk alerts ---
+  if (n.type === 'risk_alert') {
+    if (roleName === 'student')  return '/student/academic-status.html';
+    if (roleName === 'lecturer') return `${base}/at-risk-students.html`;
+    if (roleName === 'hod')      return `${base}/risk-monitoring.html`;
+    return `${base}/risk-monitoring.html`;
+  }
+
+  // --- Attendance alerts ---
+  if (n.type === 'attendance_alert') {
+    if (roleName === 'student')  return '/student/my-attendance.html';
+    if (roleName === 'lecturer') return `${base}/attendance.html`;
+    return `${base}/attendance.html`;
+  }
+
+  // --- Interventions ---
+  if (n.type === 'intervention') {
+    if (roleName === 'student')  return '/student/interventions.html';
+    if (roleName === 'lecturer') return `${base}/interventions.html`;
+    if (roleName === 'hod')      return `${base}/interventions.html`;
+    return `${base}/interventions.html`;
+  }
+
+  // --- Announcements / system ---
+  if (n.type === 'announcement' || n.type === 'system') {
+    return `${base}/notifications.html`;
+  }
+
+  // Fallback
+  return `${base}/dashboard.html`;
+}
+
+/* ============================================================
+   MY NOTIFICATIONS
+   ============================================================ */
 async function listMine(req, res, next) {
   try {
     const limit = parseInt(req.query.limit || '20', 10);
@@ -26,10 +79,25 @@ async function listMine(req, res, next) {
       [req.user.id]
     );
 
-    res.json({ success: true, data: { items: r.rows, unread: unread.rows[0].n } });
+    // Determine base path for this user's role
+    const base =
+      req.user.role_name === 'admin'    ? '/admin' :
+      req.user.role_name === 'hod'      ? '/hod' :
+      req.user.role_name === 'lecturer' ? '/lecturer' :
+                                          '/student';
+
+    const items = r.rows.map(n => ({
+      ...n,
+      link: buildNotificationLink(n, req.user.role_name, base),
+    }));
+
+    res.json({ success: true, data: { items, unread: unread.rows[0].n } });
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   MARK READ
+   ============================================================ */
 async function markRead(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -52,6 +120,9 @@ async function markAllRead(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   CREATE (admin/other services)
+   ============================================================ */
 async function create(req, res, next) {
   try {
     const { user_id, title, message, type = 'system', related_id = null } = req.body;
@@ -63,10 +134,16 @@ async function create(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   BROADCAST (admin)
+   ============================================================ */
 async function broadcast(req, res, next) {
   try {
     const { roles, title, message, type = 'announcement' } = req.body;
-    const targetRoles = Array.isArray(roles) && roles.length ? roles : ['admin', 'hod', 'lecturer', 'student'];
+    const targetRoles = Array.isArray(roles) && roles.length
+      ? roles
+      : ['admin', 'hod', 'lecturer', 'student'];
+
     const r = await db.query(`
       INSERT INTO notifications (user_id, title, message, type)
       SELECT u.id, $1, $2, $3
@@ -74,12 +151,15 @@ async function broadcast(req, res, next) {
        WHERE u.is_active = TRUE AND r.name = ANY($4)
       RETURNING id
     `, [title, message, type, targetRoles]);
+
     res.json({ success: true, count: r.rowCount });
   } catch (err) { next(err); }
 }
 
+/* ============================================================
+   LIST ALL (admin)
+   ============================================================ */
 async function listAll(req, res, next) {
-  // Admin-only: list recent notifications across all users
   try {
     const limit = parseInt(req.query.limit || '50', 10);
     const r = await db.query(`
@@ -95,14 +175,13 @@ async function listAll(req, res, next) {
 }
 
 /* ============================================================
-   HOD BROADCAST — send to department members only
+   HOD BROADCAST — department members only
    ============================================================ */
 async function broadcastToDepartment(req, res, next) {
   try {
     const { title, message, targetRoles } = req.body;
     if (!title || !message) throw new AppError('Title and message required.', 400);
 
-    // Find HOD's department
     const deptRow = await db.query(
       'SELECT id, name FROM departments WHERE hod_id = $1 AND is_active = TRUE',
       [req.user.id]
@@ -110,12 +189,10 @@ async function broadcastToDepartment(req, res, next) {
     if (!deptRow.rows[0]) throw new AppError('You are not assigned as HOD.', 403);
     const departmentId = deptRow.rows[0].id;
 
-    // Default to all dept roles if not specified
     const roles = Array.isArray(targetRoles) && targetRoles.length
       ? targetRoles
       : ['lecturer', 'student'];
 
-    // Get all users in this department
     const users = await db.query(`
       SELECT DISTINCT u.id, u.email, u.full_name
         FROM users u
@@ -135,7 +212,6 @@ async function broadcastToDepartment(req, res, next) {
       });
     }
 
-    // Insert notifications for each user
     let sent = 0;
     for (const u of users.rows) {
       await db.query(`
@@ -145,7 +221,6 @@ async function broadcastToDepartment(req, res, next) {
       sent++;
     }
 
-    // Audit
     try {
       await db.query(`
         INSERT INTO audit_logs (user_id, action, module, details)
