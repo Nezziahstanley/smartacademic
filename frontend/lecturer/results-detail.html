@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Result Detail — SMARTACADEMIC Lecturer</title>
+  <link rel="icon" type="image/png" href="/assets/images/fpu-logo.png" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/topbar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <div id="sidebarSlot"></div>
+    <div class="main">
+      <div id="topbarSlot"></div>
+      <main class="page">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <div>
+            <div class="breadcrumb">
+              <a href="/lecturer/results.html">Results</a>
+              <span class="sep">›</span>
+              <span id="crumbCourse">Loading…</span>
+            </div>
+            <h1 id="pageTitle">Result Detail</h1>
+            <p id="pageSubtitle">Per-student scores for this course.</p>
+          </div>
+          <div class="page-actions">
+            <a href="/lecturer/results.html" class="btn btn-ghost">← Back to Results</a>
+          </div>
+        </div>
+
+        <!-- Summary strip -->
+        <div class="stat-grid" id="summaryStrip">
+          <div class="stat">
+            <div class="stat-icon primary">👥</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sStudents">—</div>
+              <div class="stat-label">Students</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon accent">📊</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sAvg">—</div>
+              <div class="stat-label">Average Score</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon green">📢</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sPublished">—</div>
+              <div class="stat-label">Published</div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon yellow">📋</div>
+            <div class="stat-body">
+              <div class="stat-value" id="sStatus">—</div>
+              <div class="stat-label">Submission Status</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Return reason (only shown if returned) -->
+        <div id="returnBanner" class="msg msg-error" style="display:none;"></div>
+
+        <!-- Submitted/approved timestamps -->
+        <div id="timeline" class="msg msg-info" style="display:none;margin-bottom:16px;"></div>
+
+        <!-- Student table -->
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Matric</th>
+                <th style="text-align:right;">CA</th>
+                <th style="text-align:right;">Exam</th>
+                <th style="text-align:right;">Total</th>
+                <th style="text-align:right;">Grade</th>
+                <th style="text-align:right;">Published</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      const { $, api, esc } = window.SACrud;
+
+      function statusBadgeClass(s) {
+        return {
+          draft:     'badge-gray',
+          submitted: 'badge-yellow',
+          approved:  'badge-green',
+          returned:  'badge-red',
+          mixed:     'badge-orange',
+        }[s] || 'badge-gray';
+      }
+
+      function gradeBadge(g) {
+        return {
+          A: 'badge-green', B: 'badge-blue', C: 'badge-blue',
+          D: 'badge-yellow', E: 'badge-yellow', F: 'badge-red',
+        }[g] || 'badge-gray';
+      }
+
+      async function load() {
+        const params = new URLSearchParams(location.search);
+        const courseId  = parseInt(params.get('course'), 10);
+        const sessionId = parseInt(params.get('session'), 10);
+        const semId     = parseInt(params.get('semester'), 10);
+
+        if (!courseId || !sessionId || !semId) {
+          $('#pageTitle').textContent = 'Missing parameters';
+          $('#pageSubtitle').textContent = 'The URL is missing course, session, or semester.';
+          $('#tbody').innerHTML =
+            '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">Invalid link. Return to <a href="/lecturer/results.html">Results</a>.</td></tr>';
+          return;
+        }
+
+        const { ok, data } = await api(
+          `/api/lecturer/results/${courseId}/detail?session_id=${sessionId}&semester_id=${semId}`
+        );
+
+        if (!ok) {
+          $('#pageTitle').textContent = 'Unable to load';
+          $('#pageSubtitle').textContent = (data && data.error) || 'Failed to load result detail.';
+          $('#tbody').innerHTML =
+            '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--red);">' +
+            esc(data?.error || 'Failed') +
+            '</td></tr>';
+          return;
+        }
+
+        const { course, submission, summary, students } = data.data;
+
+        // Header
+        document.title = `${course.code} — Result Detail`;
+        $('#crumbCourse').textContent = `${course.code} — ${course.title}`;
+        $('#pageTitle').textContent = `${course.code} — ${course.title}`;
+        $('#pageSubtitle').textContent =
+          `${course.session_name} · ${course.semester_name} · Level ${course.level}`;
+
+        // Summary cards
+        $('#sStudents').textContent  = summary.students;
+        $('#sAvg').textContent       = summary.avg_score != null ? summary.avg_score : '—';
+        $('#sPublished').textContent = `${summary.published} / ${summary.students}`;
+        $('#sStatus').innerHTML      =
+          `<span class="badge ${statusBadgeClass(submission.status)}">${esc(submission.status)}</span>`;
+
+        // Return reason
+        if (submission.status === 'returned' && submission.return_reason) {
+          const b = $('#returnBanner');
+          b.style.display = 'block';
+          b.innerHTML = `<strong>↩ Returned by HOD:</strong> ${esc(submission.return_reason)}`;
+        }
+
+        // Timeline
+        if (submission.submitted_at || submission.approved_at) {
+          const t = $('#timeline');
+          t.style.display = 'block';
+          const parts = [];
+          if (submission.submitted_at) {
+            parts.push(`📤 Submitted: ${new Date(submission.submitted_at).toLocaleString()}`);
+          }
+          if (submission.approved_at) {
+            parts.push(`✅ Approved: ${new Date(submission.approved_at).toLocaleString()}`);
+          }
+          t.innerHTML = parts.join('<br>');
+        }
+
+        // Rows
+        const body = $('#tbody');
+        if (!students.length) {
+          body.innerHTML =
+            '<tr><td colspan="7">' +
+            '<div class="empty" style="padding:40px;">' +
+              '<div class="empty-icon">📋</div>' +
+              '<h3>No scores yet</h3>' +
+              '<p>Enter scores in <a href="/lecturer/assessments.html">Assessments</a> first.</p>' +
+            '</div></td></tr>';
+          return;
+        }
+
+        body.innerHTML = students.map(s => `
+          <tr>
+            <td><div style="font-weight:600;">${esc(s.student_name)}</div></td>
+            <td>${esc(s.matric_no)}</td>
+            <td style="text-align:right;">${parseFloat(s.ca_score || 0).toFixed(1)}</td>
+            <td style="text-align:right;">${parseFloat(s.exam_score || 0).toFixed(1)}</td>
+            <td style="text-align:right;"><strong>${parseFloat(s.total_score || 0).toFixed(1)}</strong></td>
+            <td style="text-align:right;">
+              <span class="badge ${gradeBadge(s.grade)}">${esc(s.grade || '—')}</span>
+            </td>
+            <td style="text-align:right;">
+              ${s.is_published
+                ? '<span class="badge badge-green">Published</span>'
+                : '<span class="badge badge-gray">Hidden</span>'}
+            </td>
+          </tr>`).join('');
+      }
+
+      document.addEventListener('sa:layout-ready', load);
+    })();
+  </script>
+</body>
+</html>
