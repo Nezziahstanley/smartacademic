@@ -394,14 +394,41 @@ async function listRisk(req, res, next) {
   try {
     const deptId = await getHodDepartmentId(req.user.id);
     const { category, level } = req.query;
-    const params = [deptId]; const where = ['s.department_id = $1'];
+    const params = [deptId];
+    const where = ['s.department_id = $1'];
+
     if (category) { params.push(category); where.push(`ra.risk_category = $${params.length}`); }
-    if (level) { params.push(parseInt(level, 10)); where.push(`s.level = $${params.length}`); }
+    if (level)    { params.push(parseInt(level, 10)); where.push(`s.level = $${params.length}`); }
 
     const r = await db.query(`
       SELECT ra.id, ra.risk_score, ra.risk_category, ra.attendance_pct, ra.gpa,
              ra.failed_courses, ra.factors, ra.assessed_at,
-             s.id AS student_id, s.matric_no, s.level, u.full_name, u.email
+             s.id AS student_id, s.matric_no, s.level, u.full_name, u.email,
+
+             -- Active (non-closed) intervention counts
+             COALESCE((
+               SELECT COUNT(*)::int
+                 FROM interventions i
+                WHERE i.student_id = s.id
+                  AND i.status IN ('Pending', 'In Progress')
+             ), 0) AS active_interventions,
+
+             -- The most recent active intervention (for quick display)
+             (
+               SELECT json_build_object(
+                 'id', i.id,
+                 'title', i.title,
+                 'status', i.status,
+                 'priority', i.priority,
+                 'created_at', i.created_at
+               )
+                 FROM interventions i
+                WHERE i.student_id = s.id
+                  AND i.status IN ('Pending', 'In Progress')
+                ORDER BY i.created_at DESC
+                LIMIT 1
+             ) AS latest_intervention
+
         FROM risk_assessments ra
         JOIN students s ON s.id = ra.student_id
         JOIN users u ON u.id = s.user_id
@@ -413,6 +440,37 @@ async function listRisk(req, res, next) {
          CASE ra.risk_category WHEN 'RED' THEN 1 WHEN 'ORANGE' THEN 2 WHEN 'YELLOW' THEN 3 ELSE 4 END,
          ra.risk_score DESC
     `, params);
+
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
+/* ==================== STUDENT PICKER ==================== */
+/**
+ * GET /api/hod/students-for-select
+ * Returns a lightweight list of students in the HOD's department
+ * for the "+ New Intervention" student picker.
+ */
+async function listStudentsForSelect(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const r = await db.query(`
+      SELECT s.id, s.matric_no, s.level, u.full_name, p.name AS programme_name,
+             COALESCE(ra.risk_category, 'GREEN') AS risk_category
+        FROM students s
+        JOIN users u ON u.id = s.user_id
+        JOIN programmes p ON p.id = s.programme_id
+        LEFT JOIN risk_assessments ra
+               ON ra.student_id = s.id
+              AND ra.assessed_at = (
+                SELECT MAX(assessed_at)
+                  FROM risk_assessments
+                 WHERE student_id = s.id
+              )
+       WHERE s.department_id = $1
+         AND s.is_active = TRUE
+       ORDER BY u.full_name
+    `, [deptId]);
     res.json({ success: true, data: r.rows });
   } catch (err) { next(err); }
 }

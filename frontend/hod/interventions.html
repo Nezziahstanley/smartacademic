@@ -15,7 +15,15 @@
     <div class="main">
       <div id="topbarSlot"></div>
       <main class="page">
-        <div class="page-header"><div><h1>Interventions</h1><p>Student support interventions in your department.</p></div></div>
+        <div class="page-header">
+          <div>
+            <h1>Interventions</h1>
+            <p>Student support interventions in your department.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnNew">+ New Intervention</button>
+          </div>
+        </div>
 
         <div class="filters">
           <select class="select" id="statusFilter" style="max-width:180px;">
@@ -25,15 +33,25 @@
             <option value="Completed">Completed</option>
             <option value="Closed">Closed</option>
           </select>
+          <div class="search">
+            <input type="search" id="searchInput" placeholder="Search by student or title..." />
+          </div>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
 
         <div class="table-wrap">
           <table class="table">
-            <thead><tr>
-              <th>Student</th><th>Title</th><th>Type</th><th>Assigned</th>
-              <th>Priority</th><th>Status</th><th style="text-align:right;">Actions</th>
-            </tr></thead>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Assigned</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
             <tbody id="tbody"><tr><td colspan="7"><div class="skeleton" style="height:22px;"></div></td></tr></tbody>
           </table>
         </div>

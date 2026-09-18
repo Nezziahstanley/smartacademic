@@ -83,9 +83,12 @@ router.get('/risk', asyncHandler(ctrl.listRisk));
 
 /* ============================================================
    INTERVENTIONS
+   IMPORTANT: specific routes MUST come before /interventions/:id
    ============================================================ */
 router.get('/interventions', asyncHandler(ctrl.listInterventions));
 router.get('/interventions/staff', asyncHandler(ctrl.listStaff));
+router.get('/interventions/students', asyncHandler(ctrl.listStudentsForSelect));
+
 router.post('/interventions',
   body('student_id').isInt(),
   body('type').isIn([
@@ -103,6 +106,7 @@ router.post('/interventions',
   validate,
   asyncHandler(ctrl.createIntervention)
 );
+
 router.put('/interventions/:id',
   param('id').isInt(),
   validate,
@@ -110,7 +114,7 @@ router.put('/interventions/:id',
 );
 
 /* ============================================================
-   SUBMISSIONS
+   SUBMISSIONS (HOD proposes → admin approves)
    ============================================================ */
 router.post('/submissions',
   body('type').isIn(['student', 'lecturer', 'course']),

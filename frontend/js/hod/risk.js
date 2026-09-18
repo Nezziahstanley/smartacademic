@@ -1,7 +1,7 @@
 // ============================================================
 // SMARTACADEMIC — HOD Risk Monitoring
-// Lists at-risk students. "Intervene" opens a modal so the HOD
-// can create the intervention on the spot.
+// Lists at-risk students. Shows an "Intervened" badge if there
+// is an active intervention. "+ Intervene" opens a modal.
 // ============================================================
 
 'use strict';
@@ -40,38 +40,45 @@
       return;
     }
 
-    $('#tbody').innerHTML = state.items.map(r => `
-      <tr>
-        <td>
-          <div style="font-weight:600;">${esc(r.full_name)}</div>
-          <div style="font-size:12px;color:var(--ink-3);">${esc(r.email || '')}</div>
-        </td>
-        <td>${esc(r.matric_no)}</td>
-        <td>${r.level}</td>
-        <td><span class="badge badge-${r.risk_category.toLowerCase()}">${r.risk_category}</span></td>
-        <td><strong>${parseFloat(r.risk_score).toFixed(1)}</strong></td>
-        <td>${parseFloat(r.attendance_pct || 0).toFixed(1)}%</td>
-        <td>${parseFloat(r.gpa || 0).toFixed(2)}</td>
-        <td style="text-align:right;">
-          <button class="btn btn-primary btn-sm"
-                  data-intervene="${r.student_id}">
-            + Intervene
-          </button>
-        </td>
-      </tr>`).join('');
+    $('#tbody').innerHTML = state.items.map(r => {
+      const intervened = (r.active_interventions || 0) > 0;
+      const latest = r.latest_intervention;
+
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600;display:flex;align-items:center;gap:8px;">
+              ${esc(r.full_name)}
+              ${intervened ? `<span class="badge badge-green" title="${esc(latest?.title || '')}">✓ Intervened</span>` : ''}
+            </div>
+            <div style="font-size:12px;color:var(--ink-3);">${esc(r.email || '')}</div>
+          </td>
+          <td>${esc(r.matric_no)}</td>
+          <td>${r.level}</td>
+          <td><span class="badge badge-${r.risk_category.toLowerCase()}">${r.risk_category}</span></td>
+          <td><strong>${parseFloat(r.risk_score).toFixed(1)}</strong></td>
+          <td>${parseFloat(r.attendance_pct || 0).toFixed(1)}%</td>
+          <td>${parseFloat(r.gpa || 0).toFixed(2)}</td>
+          <td style="text-align:right;">
+            <button class="btn ${intervened ? 'btn-ghost' : 'btn-primary'} btn-sm"
+                    data-intervene="${r.student_id}">
+              ${intervened ? '+ Add another' : '+ Intervene'}
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
 
     $('#tbody').querySelectorAll('[data-intervene]').forEach(b =>
       b.addEventListener('click', () => openIntervene(parseInt(b.dataset.intervene, 10))));
   }
 
   /* ============================================================
-     INTERVENE MODAL
+     INTERVENE MODAL (unchanged from before)
      ============================================================ */
   async function openIntervene(studentId) {
     const student = state.items.find(x => x.student_id === studentId);
     if (!student) return;
 
-    // Load staff + student list once for the assignee dropdown
     let staff = [];
     const staffRes = await api('/api/hod/interventions/staff');
     if (staffRes.ok) staff = staffRes.data.data;
@@ -138,15 +145,16 @@
         <div class="field">
           <label>Description</label>
           <textarea class="textarea" id="f_desc" rows="4"
-                    placeholder="What should the assigned staff member do? Any context from the risk factors?"></textarea>
+                    placeholder="What should the assigned staff member do?"></textarea>
         </div>
 
-        <div class="field" id="factorsBox" style="display:${student.factors ? 'block' : 'none'};">
-          <label>Risk factors (read-only)</label>
-          <div class="msg msg-warning show" style="margin:0;font-size:13px;">
-            ${esc(student.factors || '')}
-          </div>
-        </div>
+        ${student.factors ? `
+          <div class="field">
+            <label>Risk factors (read-only)</label>
+            <div class="msg msg-warning show" style="margin:0;font-size:13px;">
+              ${esc(student.factors)}
+            </div>
+          </div>` : ''}
       `,
       onConfirm: async (bd, close) => {
         const payload = {
@@ -159,24 +167,17 @@
           description: bd.querySelector('#f_desc').value.trim() || null,
         };
 
-        if (!payload.title) {
-          alert('Title is required.');
-          return;
-        }
+        if (!payload.title) { alert('Title is required.'); return; }
 
         const { ok, data } = await api('/api/hod/interventions', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
 
-        if (!ok) {
-          alert(data?.error || 'Failed to create intervention.');
-          return;
-        }
-
+        if (!ok) { alert(data?.error || 'Failed to create intervention.'); return; }
         close();
         toast('✅ Intervention created');
-        // Don't reload — the intervention doesn't change the risk score
+        load(); // ← refresh so the "Intervened" badge appears
       },
     });
   }
