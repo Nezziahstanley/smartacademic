@@ -123,46 +123,39 @@
           </div>
         </div>
 
-        <!-- ACTIVITY + HIGH RISK -->
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h3>Recent Activity</h3>
-                <p>Latest actions across the system</p>
-              </div>
+        <!-- AT-RISK SUMMARY (full-width) -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>At-Risk Students</h3>
+              <p>Snapshot of students who need attention. Open the full list for details.</p>
             </div>
-            <ul class="activity-list" id="activityList">
-              <li class="skeleton" style="height: 60px; margin-bottom: 10px;"></li>
-              <li class="skeleton" style="height: 60px; margin-bottom: 10px;"></li>
-              <li class="skeleton" style="height: 60px;"></li>
-            </ul>
+            <a href="/admin/risk-monitoring.html" class="btn btn-primary btn-sm">
+              Open Risk Monitoring →
+            </a>
           </div>
 
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h3>Top At-Risk Students</h3>
-                <p>Students requiring immediate attention</p>
-              </div>
-              <a href="/admin/risk-monitoring.html" class="btn btn-ghost btn-sm">View all →</a>
-            </div>
-            <div class="table-wrap" style="box-shadow: none; border: none;">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Risk</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody id="highRiskBody">
-                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
-                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
-                  <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
-                </tbody>
-              </table>
-            </div>
+          <div class="table-wrap" style="box-shadow:none;border:none;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Risk</th>
+                  <th style="text-align:right;">Score</th>
+                </tr>
+              </thead>
+              <tbody id="highRiskBody">
+                <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+                <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+                <tr><td colspan="3"><div class="skeleton" style="height: 20px;"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:16px;text-align:center;">
+            <a href="/admin/risk-monitoring.html" class="btn btn-ghost w-full">
+              View all at-risk students →
+            </a>
           </div>
         </div>
 

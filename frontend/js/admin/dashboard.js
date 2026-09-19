@@ -1,6 +1,7 @@
 // ============================================================
 // SMARTACADEMIC — Admin Dashboard Script
 // Fetches stats and renders KPI cards + Chart.js charts.
+// At-risk panel links out to /admin/risk-monitoring.html.
 // ============================================================
 
 'use strict';
@@ -27,34 +28,6 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-
-  function relativeTime(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
-    return d.toLocaleDateString();
-  }
-
-  const actionIcon = {
-    create_user: '👤', update_user: '✏️', delete_user: '🗑️',
-    activate_user: '✅', deactivate_user: '⛔', reset_password: '🔑',
-    login: '🔓', register: '📝',
-  };
-
-  const actionLabel = {
-    create_user: 'Created user',
-    update_user: 'Updated user',
-    delete_user: 'Deleted user',
-    activate_user: 'Activated user',
-    deactivate_user: 'Deactivated user',
-    reset_password: 'Reset password',
-    login: 'Logged in',
-    register: 'Registered',
-  };
 
   /* ============================================================
      RENDER KPIs
@@ -182,40 +155,7 @@
   }
 
   /* ============================================================
-     ACTIVITY FEED
-     ============================================================ */
-  function renderActivity(rows) {
-    const list = $('#activityList');
-    if (!list) return;
-
-    if (!rows || rows.length === 0) {
-      list.innerHTML = `
-        <div class="empty" style="padding: 30px 0;">
-          <div class="empty-icon">📜</div>
-          <h3>No recent activity</h3>
-          <p>Actions will appear here.</p>
-        </div>`;
-      return;
-    }
-
-    list.innerHTML = rows.map(r => {
-      const ico = actionIcon[r.action] || '📌';
-      const label = actionLabel[r.action] || r.action;
-      const user = r.user_name || 'System';
-      return `
-        <li class="activity-item">
-          <div class="activity-ico">${ico}</div>
-          <div class="activity-body">
-            <strong>${escapeHtml(label)}</strong>
-            <p>${escapeHtml(user)} · module: ${escapeHtml(r.module || '—')}</p>
-            <div class="activity-time">${relativeTime(r.created_at)}</div>
-          </div>
-        </li>`;
-    }).join('');
-  }
-
-  /* ============================================================
-     HIGH RISK TABLE
+     AT-RISK TABLE (mini snapshot)
      ============================================================ */
   function renderHighRisk(rows) {
     const body = $('#highRiskBody');
@@ -244,7 +184,7 @@
               <span class="risk-dot ${cls}"></span>${r.risk_category}
             </span>
           </td>
-          <td><strong>${parseFloat(r.risk_score || 0).toFixed(1)}</strong></td>
+          <td style="text-align:right;"><strong>${parseFloat(r.risk_score || 0).toFixed(1)}</strong></td>
         </tr>`;
     }).join('');
   }
@@ -257,13 +197,11 @@
       const { ok, data } = await api('/api/admin/dashboard');
       if (!ok || !data || !data.success) throw new Error('Failed to load dashboard');
 
-      const { stats, activity, highRisk, attendance } = data.data;
+      const { stats, highRisk, attendance } = data.data;
 
       renderStats(stats);
-      renderActivity(activity);
       renderHighRisk(highRisk);
 
-      // Wait for Chart.js to be loaded if deferred
       if (typeof Chart === 'undefined') {
         document.addEventListener('DOMContentLoaded', () => {
           renderRiskChart(stats.risk);
@@ -279,7 +217,6 @@
     }
   }
 
-  // Wait for the layout to be ready (topbar/sidebar injected)
   document.addEventListener('sa:layout-ready', boot);
   if (document.readyState === 'complete') {
     setTimeout(() => {
