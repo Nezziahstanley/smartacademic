@@ -1,7 +1,7 @@
 // ============================================================
 // SMARTACADEMIC — Email Service
-// Tries SMTP first (Gmail by default), then falls back to
-// Resend's HTTPS API when SMTP is blocked or unavailable.
+// Primary: Brevo SMTP relay (smtp-relay.brevo.com)
+// Fallback: Resend HTTPS API
 // ============================================================
 
 'use strict';
@@ -11,12 +11,16 @@ const nodemailer = require('nodemailer');
 /* ============================================================
    CONFIG
    ============================================================ */
-const SMTP_USER = process.env.EMAIL_USER || '';
-const SMTP_PASS = process.env.EMAIL_PASSWORD || '';
-const SMTP_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+const SMTP_HOST = process.env.EMAIL_HOST || 'smtp-relay.brevo.com';
 const SMTP_PORT = parseInt(process.env.EMAIL_PORT || '587', 10);
 const SMTP_SECURE = process.env.EMAIL_SECURE === 'true'; // true only for port 465
+
+// Brevo SMTP login (xxxxx@smtp-brevo.com) and SMTP key
+const SMTP_USER = process.env.EMAIL_USER || '';
+const SMTP_PASS = process.env.EMAIL_PASSWORD || '';
+
 const FROM_NAME = process.env.EMAIL_FROM_NAME || 'SMARTACADEMIC';
+const FROM_ADDRESS = process.env.EMAIL_FROM || SMTP_USER;
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || `SMARTACADEMIC <onboarding@resend.dev>`;
@@ -24,19 +28,18 @@ const RESEND_FROM = process.env.RESEND_FROM || `SMARTACADEMIC <onboarding@resend
 const useSmtp = !!(SMTP_USER && SMTP_PASS);
 
 /* ============================================================
-   SMTP TRANSPORTER (optional)
+   SMTP TRANSPORTER
    ============================================================ */
 const transporter = useSmtp
   ? nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      requireTLS: !SMTP_SECURE,
+      secure: SMTP_SECURE,        // false for port 587
+      requireTLS: !SMTP_SECURE,   // required for port 587
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS,
       },
-      // Fail fast — we don't want to hang for 10s on a blocked port
       connectionTimeout: 8000,
       greetingTimeout: 5000,
       socketTimeout: 15000,
@@ -46,7 +49,7 @@ const transporter = useSmtp
 if (useSmtp) {
   transporter.verify((error) => {
     if (error) {
-      console.warn('[email] SMTP unavailable, will fall back to Resend if configured:', error.message);
+      console.warn('[email] SMTP unavailable:', error.message);
     } else {
       console.log('[email] ✅ SMTP server ready');
     }
@@ -55,35 +58,20 @@ if (useSmtp) {
   console.warn('[email] EMAIL_USER / EMAIL_PASSWORD not set — SMTP disabled');
 }
 
-if (!RESEND_API_KEY) {
-  console.warn('[email] RESEND_API_KEY not set — Resend fallback disabled');
-}
-
 /* ============================================================
    CORE SEND
    ============================================================ */
-/**
- * Send an email. Tries SMTP first, then Resend.
- * Throws if both fail.
- *
- * @param {object} opts
- * @param {string} opts.to       Recipient email
- * @param {string} opts.subject  Subject line
- * @param {string} [opts.text]   Plain-text body
- * @param {string} [opts.html]   HTML body
- * @returns {Promise<object>}    Provider response
- */
 async function send({ to, subject, text, html }) {
   if (!to) throw new Error('No recipient email provided');
   if (!subject) throw new Error('No subject provided');
 
   const errors = [];
 
-  // ---- 1. SMTP ----
+  // ---- 1. SMTP (Brevo) ----
   if (transporter) {
     try {
       const info = await transporter.sendMail({
-        from: `"${FROM_NAME}" <${SMTP_USER}>`,
+        from: `"${FROM_NAME}" <${FROM_ADDRESS}>`,
         to,
         subject,
         text: text || '',
@@ -94,7 +82,6 @@ async function send({ to, subject, text, html }) {
     } catch (err) {
       console.warn('[email] SMTP failed:', err.message);
       errors.push(`smtp: ${err.message}`);
-      // fall through to Resend
     }
   }
 
@@ -115,14 +102,10 @@ async function send({ to, subject, text, html }) {
           html: html || `<p>${text || ''}</p>`,
         }),
       });
-
       const data = await res.json().catch(() => null);
-
       if (!res.ok) {
-        const msg = data?.message || data?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
+        throw new Error(data?.message || `HTTP ${res.status}`);
       }
-
       console.log('[email] Sent via Resend:', data?.id || 'ok');
       return { provider: 'resend', messageId: data?.id || 'ok' };
     } catch (err) {
@@ -131,17 +114,12 @@ async function send({ to, subject, text, html }) {
     }
   }
 
-  // Both failed
   throw new Error(`All email providers failed. Errors: ${errors.join(' | ') || 'none configured'}`);
 }
 
 /* ============================================================
-   CONVENIENCE SENDERS
+   CONVENIENCE SENDERS (unchanged API)
    ============================================================ */
-
-/**
- * Send a one-time password.
- */
 async function sendOTP(to, code, purpose = 'verification') {
   const subject = `SMARTACADEMIC — Your ${purpose} code`;
   const html = `
@@ -156,19 +134,11 @@ async function sendOTP(to, code, purpose = 'verification') {
         </div>
         <p style="color:#64748b;font-size:13px;">This code expires in <strong>10 minutes</strong>.</p>
         <p style="color:#64748b;font-size:13px;">If you didn't request this, ignore this email.</p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;">
-        <p style="color:#94a3b8;font-size:12px;text-align:center;">
-          SMARTACADEMIC — Academic Early-Warning System<br>
-          Contact: chosenmopol2003@gmail.com
-        </p>
       </div>
     </div>`;
   return send({ to, subject, text: `Your ${purpose} code is: ${code}`, html });
 }
 
-/**
- * Send a risk alert to a lecturer/HOD/admin.
- */
 async function sendRiskAlert(to, studentName, category, score) {
   const colors = { GREEN: '#10b981', YELLOW: '#f59e0b', ORANGE: '#f97316', RED: '#ef4444' };
   const color = colors[category] || '#64748b';
@@ -185,7 +155,4 @@ async function sendRiskAlert(to, studentName, category, score) {
   return send({ to, subject: `Risk Alert: ${studentName} is ${category}`, html });
 }
 
-/* ============================================================
-   EXPORTS
-   ============================================================ */
 module.exports = { send, sendOTP, sendRiskAlert };
