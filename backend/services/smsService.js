@@ -101,6 +101,9 @@ function normalizePhone(raw) {
   if (s.startsWith('234')  && s.length >= 12) return '+' + s;
   if (s.startsWith('0')    && s.length >= 11) return '+234' + s.slice(1);
 
+  // Nigerian mobile without leading 0 — e.g. "7041145338" or "8041234567"
+  if (/^[789]\d{9}$/.test(s)) return '+234' + s;
+
   return null;
 }
 
