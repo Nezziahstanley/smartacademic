@@ -18,7 +18,6 @@
   box-shadow: 0 1px 0 rgba(22, 101, 52, 0.04);
 }
 
-/* Thin gold accent line under topbar */
 .topbar::after {
   content: "";
   position: absolute;
@@ -28,7 +27,6 @@
   opacity: 0.5;
 }
 
-/* Hamburger */
 .tb-hamburger {
   width: 40px; height: 40px;
   border: none;
@@ -50,7 +48,6 @@
   transition: .2s;
 }
 
-/* Search */
 .tb-search {
   flex: 1;
   max-width: 380px;
@@ -84,7 +81,6 @@
 
 .tb-spacer { flex: 1; }
 
-/* Action buttons */
 .tb-actions {
   display: flex;
   align-items: center;
@@ -106,7 +102,6 @@
 }
 .tb-btn:hover { background: var(--primary-50); color: var(--primary); }
 
-/* Notification badge */
 .tb-badge {
   position: absolute;
   top: 6px; right: 6px;
@@ -150,7 +145,6 @@
   box-shadow: 0 4px 12px rgba(22, 101, 52, 0.12);
 }
 
-/* Avatar — supports photo (background-image) or initials (text) */
 .profile-avatar {
   width: 32px;
   height: 32px;
@@ -201,7 +195,6 @@
 }
 .profile.open .profile-caret { transform: rotate(180deg); }
 
-/* Dropdown */
 .profile-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -334,6 +327,7 @@
   overflow-y: auto;
   flex: 1;
   max-height: 420px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .np-item {
@@ -392,6 +386,10 @@
    RESPONSIVE
    ============================================================ */
 @media (max-width: 640px) {
+  .topbar {
+    padding: 0 12px;
+    height: 56px;
+  }
   .tb-search { display: none; }
   .profile-meta { display: none; }
   .profile-btn {
@@ -400,5 +398,15 @@
     background: transparent;
   }
   .profile-caret { display: none; }
-  .topbar { padding: 0 14px; }
+
+  .notif-panel {
+    top: calc(56px + 8px);
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: calc(100vw - 16px);
+  }
+  .notif-panel .np-list {
+    max-height: 60vh;
+  }
 }

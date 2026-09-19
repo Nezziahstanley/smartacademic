@@ -1,8 +1,7 @@
 ﻿/* ============================================================
    SMARTACADEMIC — Dashboard Layout (FPU Theme)
-   Sidebar (left) + Main content (right) shell used by all
-   dashboards. Includes topbar, page header, cards, grids,
-   and responsive behaviour.
+   Sidebar + Main content shell. Includes topbar, page header,
+   cards, grids, responsive behaviour, and global scroll rules.
    ============================================================ */
 
 :root {
@@ -54,7 +53,12 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -75,6 +79,7 @@ button { font-family: inherit; }
   grid-template-columns: var(--sidebar-w) 1fr;
   min-height: 100vh;
   transition: grid-template-columns var(--transition);
+  overflow-x: hidden;
 }
 
 body.sidebar-collapsed .app-shell {
@@ -88,6 +93,7 @@ body.sidebar-collapsed .app-shell {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow-x: hidden;
   background: var(--bg);
 }
 
@@ -97,6 +103,8 @@ body.sidebar-collapsed .app-shell {
   width: 100%;
   margin: 0 auto;
   flex: 1;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ============================================================
@@ -149,6 +157,7 @@ body.sidebar-collapsed .app-shell {
   box-shadow: var(--shadow-sm);
   padding: 22px;
   transition: box-shadow var(--transition), transform var(--transition);
+  overflow-wrap: anywhere;
 }
 
 .card-hover:hover {
@@ -321,12 +330,32 @@ body.sidebar-collapsed .app-shell {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-sm);
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+.table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.table-wrap::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -383,7 +412,7 @@ body.sidebar-collapsed .app-shell {
 .badge-gold   { background: var(--accent-50); color: var(--accent); }
 
 /* ============================================================
-   RISK DOT (inline)
+   RISK DOT
    ============================================================ */
 .risk-dot {
   display: inline-block;
@@ -411,6 +440,7 @@ body.sidebar-collapsed .app-shell {
 
 .input, .select, .textarea {
   width: 100%;
+  max-width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -419,6 +449,7 @@ body.sidebar-collapsed .app-shell {
   background: #fff;
   font-family: inherit;
   transition: border-color var(--transition), box-shadow var(--transition);
+  box-sizing: border-box;
 }
 .input:focus, .select:focus, .textarea:focus {
   outline: none;
@@ -519,18 +550,55 @@ body.sidebar-collapsed .app-shell {
 }
 
 @media (max-width: 900px) {
-  .page { padding: 20px 18px 50px; }
+  .page {
+    padding: 20px 16px 60px;
+    overflow-x: auto;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
   .page-header h1 { font-size: 22px; }
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
   .grid-2 { grid-template-columns: 1fr; }
+  .table th, .table td { padding: 10px 12px; }
 }
 
 @media (max-width: 640px) {
   .grid-4, .grid-3 { grid-template-columns: 1fr; }
   .field-row { grid-template-columns: 1fr; }
-  .page { padding: 18px 14px 40px; }
-  .stat { padding: 16px; }
+  .page { padding: 16px 12px 50px; }
+
+  .stat { padding: 14px; }
   .stat-value { font-size: 20px; }
-  .table th, .table td { padding: 10px 12px; font-size: 13px; }
+  .stat-icon { width: 40px; height: 40px; font-size: 18px; }
+
+  .table th, .table td { padding: 9px 10px; font-size: 13px; }
+  .table { min-width: 560px; }
+
+  .page-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .filters .search { min-width: 100%; }
+  .filters .select,
+  .filters .input { max-width: 100% !important; }
+
+  .modal { max-width: 100%; margin: 0; border-radius: 12px; }
+  .modal-foot { flex-direction: column-reverse; }
+  .modal-foot .btn { width: 100%; }
+
+  .pagination { flex-direction: column; align-items: stretch; gap: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

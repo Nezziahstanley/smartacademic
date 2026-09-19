@@ -12,13 +12,15 @@
   top: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   border-right: 1px solid rgba(255,255,255,0.06);
   transition: width var(--transition);
   z-index: 50;
-  padding-top: 3px; /* room for the gold strip */
+  padding-top: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(250,204,21,.2) transparent;
 }
 
-/* Gold top strip */
 .sidebar::before {
   content: "";
   position: absolute;
@@ -115,9 +117,7 @@ body.sidebar-collapsed .sb-role { display: none; }
 }
 body.sidebar-collapsed .sb-section-title { display: none; }
 
-/* ============================================================
-   CRITICAL: Make sure role menus display correctly
-   ============================================================ */
+/* Role-based menu visibility */
 [data-role-menu] {
   display: none;
 }
@@ -277,8 +277,14 @@ body.sidebar-collapsed .sb-logout .sb-label { display: none; }
     position: fixed;
     top: 0; left: 0;
     width: 260px;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     transform: translateX(-100%);
     transition: transform var(--transition);
+    z-index: 60;
+    padding-bottom: 80px;
   }
   body.sidebar-open .sidebar { transform: translateX(0); }
   body.sidebar-collapsed .sidebar { width: 260px; }
@@ -290,4 +296,27 @@ body.sidebar-collapsed .sb-logout .sb-label { display: none; }
   body.sidebar-collapsed .sb-brand { justify-content: flex-start; padding: 20px 20px 18px; }
   body.sidebar-collapsed .sb-link { justify-content: flex-start; padding: 10px 20px; margin: 2px 8px; }
   body.sidebar-collapsed .sb-logout { justify-content: flex-start; padding: 10px 20px; margin: 2px 8px; }
+}
+
+/* ============================================================
+   SCROLL HINT for overflowing table wrappers
+   ============================================================ */
+.table-wrap.is-scrollable {
+  position: relative;
+}
+.table-wrap.is-scrollable::after {
+  content: "→ scroll →";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #fff;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+  animation: fadeOutHint 3s ease 1s forwards;
+}
+@keyframes fadeOutHint {
+  to { opacity: 0; }
 }

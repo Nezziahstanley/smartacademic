@@ -422,6 +422,15 @@
 
     if (window.Sidebar) window.Sidebar.init();
 
+        // Load the table-scroll hint helper (once per page)
+    if (!document.querySelector('script[data-table-scroll]')) {
+      const s = document.createElement('script');
+      s.src = '/js/admin/table-scroll.js';
+      s.dataset.tableScroll = '1';
+      s.async = true;
+      document.head.appendChild(s);
+    }
+
     wireProfileMenu();
     wireNotifications();
 
