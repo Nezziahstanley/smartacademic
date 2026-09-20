@@ -938,6 +938,37 @@ async function returnResultsBulk(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/* ==================== STUDENT PICKER ==================== */
+/**
+ * GET /api/hod/interventions/students
+ * Returns a lightweight list of students in the HOD's department
+ * for the "+ New Intervention" student picker.
+ */
+async function listStudentsForSelect(req, res, next) {
+  try {
+    const deptId = await getHodDepartmentId(req.user.id);
+    const r = await db.query(`
+      SELECT s.id, s.matric_no, s.level, u.full_name,
+             p.name AS programme_name,
+             COALESCE(ra.risk_category, 'GREEN') AS risk_category
+        FROM students s
+        JOIN users u ON u.id = s.user_id
+        JOIN programmes p ON p.id = s.programme_id
+        LEFT JOIN risk_assessments ra
+               ON ra.student_id = s.id
+              AND ra.assessed_at = (
+                SELECT MAX(assessed_at)
+                  FROM risk_assessments
+                 WHERE student_id = s.id
+              )
+       WHERE s.department_id = $1
+         AND s.is_active = TRUE
+       ORDER BY u.full_name
+    `, [deptId]);
+    res.json({ success: true, data: r.rows });
+  } catch (err) { next(err); }
+}
+
 /* ==================== EXPORTS ==================== */
 module.exports = {
   getDashboard,
@@ -956,6 +987,7 @@ module.exports = {
   createIntervention,
   updateIntervention,
   listStaff,
+  listStudentsForSelect,   // ← this line
   updateOwnProfile,
   changePassword,
   uploadOwnPhoto,
