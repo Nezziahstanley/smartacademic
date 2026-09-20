@@ -24,7 +24,6 @@
 
 <div class="auth-shell">
 
-  <!-- ============ BRAND PANEL ============ -->
   <aside class="auth-brand">
     <div class="auth-brand-top">
       <a href="/" class="brand">
@@ -50,7 +49,6 @@
     </div>
   </aside>
 
-  <!-- ============ FORM PANEL ============ -->
   <main class="auth-form-wrap">
     <form class="auth-form" id="registerForm" novalidate>
       <div class="auth-form-head">
@@ -60,14 +58,12 @@
 
       <div class="msg" id="registerMsg"></div>
 
-      <!-- Role tabs -->
       <div class="tabs">
         <button type="button" class="tab active" data-role="student">Student</button>
         <button type="button" class="tab" data-role="lecturer">Lecturer</button>
       </div>
       <input type="hidden" id="role" value="student" />
 
-      <!-- Common fields -->
       <div class="field">
         <label for="full_name">Full name <span class="req">*</span></label>
         <input type="text" id="full_name" class="input" placeholder="Jane Doe" required />
@@ -90,10 +86,21 @@
         </select>
       </div>
 
-      <!-- Student-only fields -->
+      <!-- Matric number is auto-generated — no input field -->
       <div class="field role-student">
-        <label for="matric_no">Matric number <span class="req">*</span></label>
-        <input type="text" id="matric_no" class="input" placeholder="2021/CSC/001" />
+        <label>Matric number</label>
+        <div style="
+          padding:11px 14px;
+          background:#f0fdf4;
+          border:1px dashed #bbf7d0;
+          border-radius:9px;
+          font-size:13px;
+          color:#166534;
+          line-height:1.5;
+        ">
+          🎓 Your matric number will be <strong>assigned automatically</strong> after registration,
+          using the format <code style="font-size:12px;">FPU/&lt;SCHOOL&gt;/&lt;DEPT&gt;/&lt;LEVEL&gt;/&lt;YY&gt;/&lt;NNN&gt;</code>.
+        </div>
       </div>
 
       <div class="field role-student">
@@ -117,11 +124,10 @@
         </div>
         <div class="field">
           <label for="admission_year">Admission year</label>
-          <input type="number" id="admission_year" class="input" placeholder="2021" min="1990" max="2100" />
+          <input type="number" id="admission_year" class="input" placeholder="2026" min="1990" max="2100" />
         </div>
       </div>
 
-      <!-- Lecturer-only fields -->
       <div class="field role-lecturer" style="display:none;">
         <label for="staff_id">Staff ID <span class="req">*</span></label>
         <input type="text" id="staff_id" class="input" placeholder="CSC-L001" />
