@@ -1,8 +1,5 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Admin Controller
-// Dashboard stats, users CRUD, fee tracking,
-// result publishing (by department), safe result deletion,
-// bulk registration actions.
 // ============================================================
 
 'use strict';
@@ -25,10 +22,7 @@ async function getDashboard(req, res, next) {
       adminModel.getAttendanceTrend(),
     ]);
 
-    res.json({
-      success: true,
-      data: { stats, activity, highRisk, attendance },
-    });
+    res.json({ success: true, data: { stats, activity, highRisk, attendance } });
   } catch (err) { next(err); }
 }
 
@@ -54,12 +48,7 @@ async function listUsers(req, res, next) {
 
     res.json({
       success: true,
-      data: {
-        items: rows,
-        total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-      },
+      data: { items: rows, total, page: parseInt(page, 10), limit: parseInt(limit, 10) },
     });
   } catch (err) { next(err); }
 }
@@ -125,10 +114,7 @@ async function updateUser(req, res, next) {
     }
 
     await adminModel.updateUser(id, {
-      full_name,
-      email,
-      phone,
-      role_id,
+      full_name, email, phone, role_id,
       is_active: is_active === undefined ? null : is_active,
     });
 
@@ -254,8 +240,6 @@ async function updateOwnProfile(req, res, next) {
 async function changeOwnPassword(req, res, next) {
   try {
     const { current_password, new_password } = req.body;
-    const bcrypt = require('bcryptjs');
-    const env = require('../config/env');
 
     if (!new_password || new_password.length < 6) {
       throw new AppError('New password must be at least 6 characters.', 400);
@@ -312,9 +296,7 @@ async function approveRegistration(req, res, next) {
     }
 
     await adminModel.writeAudit({
-      user_id: req.user.id,
-      action: 'approve_registration',
-      module: 'registrations',
+      user_id: req.user.id, action: 'approve_registration', module: 'registrations',
       affected_record: `registration:${id}`,
     });
 
@@ -343,9 +325,7 @@ async function dropRegistration(req, res, next) {
     `, [id, req.user.id]);
 
     await adminModel.writeAudit({
-      user_id: req.user.id,
-      action: 'drop_registration',
-      module: 'registrations',
+      user_id: req.user.id, action: 'drop_registration', module: 'registrations',
       affected_record: `registration:${id}`,
     });
 
@@ -353,10 +333,6 @@ async function dropRegistration(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   BULK REGISTRATION ACTIONS
-   Return per-row success/failure lists.
-   ============================================================ */
 async function bulkApproveRegistrations(req, res, next) {
   try {
     const { ids } = req.body;
@@ -366,7 +342,7 @@ async function bulkApproveRegistrations(req, res, next) {
 
     const approved = [];
     const failed = [];
-    const notifyStudent = new Map(); // student_id → [codes]
+    const notifyStudent = new Map();
 
     for (const raw of ids) {
       const id = parseInt(raw, 10);
@@ -382,14 +358,8 @@ async function bulkApproveRegistrations(req, res, next) {
 
         const row = r.rows[0];
 
-        if (row.status === 'approved') {
-          approved.push({ id, code: row.code });
-          continue;
-        }
-        if (row.status === 'dropped') {
-          failed.push({ id, error: 'Registration was dropped' });
-          continue;
-        }
+        if (row.status === 'approved') { approved.push({ id, code: row.code }); continue; }
+        if (row.status === 'dropped') { failed.push({ id, error: 'Registration was dropped' }); continue; }
 
         await db.query(`
           UPDATE course_registrations
@@ -400,7 +370,6 @@ async function bulkApproveRegistrations(req, res, next) {
         `, [id, req.user.id]);
 
         approved.push({ id, code: row.code });
-
         if (!notifyStudent.has(row.student_id)) notifyStudent.set(row.student_id, []);
         notifyStudent.get(row.student_id).push(row.code);
       } catch (err) {
@@ -408,7 +377,6 @@ async function bulkApproveRegistrations(req, res, next) {
       }
     }
 
-    // Send ONE notification per student with a summary of their approved courses
     for (const [studentId, codes] of notifyStudent.entries()) {
       const st = await db.query('SELECT user_id FROM students WHERE id = $1', [studentId]);
       if (!st.rows[0]) continue;
@@ -460,10 +428,7 @@ async function bulkDropRegistrations(req, res, next) {
         if (!r.rows[0]) { failed.push({ id, error: 'Not found' }); continue; }
 
         const row = r.rows[0];
-        if (row.status === 'dropped') {
-          dropped.push({ id, code: row.code });
-          continue;
-        }
+        if (row.status === 'dropped') { dropped.push({ id, code: row.code }); continue; }
 
         await db.query(`
           UPDATE course_registrations
@@ -615,7 +580,6 @@ async function uploadOwnPhoto(req, res, next) {
     }
 
     await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
-
     await db.query(
       'UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2',
       [photo, req.user.id]
@@ -877,12 +841,6 @@ async function unpublishDepartment(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/* ============================================================
-   DELETE RESULT — policy-aware
-   - published → blocked
-   - approved  → soft-return to lecturer
-   - other     → hard delete
-   ============================================================ */
 async function deleteResultSafely(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -900,10 +858,7 @@ async function deleteResultSafely(req, res, next) {
     const row = r.rows[0];
 
     if (row.is_published) {
-      throw new AppError(
-        'Cannot delete a published result. Unpublish it first.',
-        409
-      );
+      throw new AppError('Cannot delete a published result. Unpublish it first.', 409);
     }
 
     if (row.submission_status === 'approved') {
@@ -961,7 +916,7 @@ async function deleteResultSafely(req, res, next) {
 }
 
 /* ============================================================
-   LEGACY PUBLISH ENDPOINTS
+   LEGACY PUBLISH
    ============================================================ */
 async function listPublishableResults(req, res, next) {
   return listPublishableResultsGrouped(req, res, next);
@@ -980,7 +935,7 @@ async function publishResults(req, res, next) {
          AND semester_id = $3
          AND submission_status = 'approved'
          AND is_published = FALSE
-       RETURNING id, student_id, course_id
+      RETURNING id, student_id, course_id
     `, [courseId, session_id, semester_id]);
 
     if (upd.rowCount > 0) {
@@ -1061,65 +1016,47 @@ async function publishResultsBulk(req, res, next) {
 }
 
 /* ============================================================
-   DEPARTMENTS OVERVIEW
-   Returns every department with aggregate counts so pages can
-   render collapsed accordion rows in a single request.
+   DEPARTMENTS OVERVIEW (used by accordion pages)
    ============================================================ */
 async function listDepartmentsOverview(req, res, next) {
   try {
     const r = await db.query(`
       SELECT
-        d.id,
-        d.name,
-        d.code,
-        d.is_active,
+        d.id, d.name, d.code, d.is_active,
         u.full_name AS hod_name,
 
-        (SELECT COUNT(*)::int
-           FROM students s
-          WHERE s.department_id = d.id
-            AND s.is_active = TRUE)                                  AS student_count,
+        (SELECT COUNT(*)::int FROM students s
+          WHERE s.department_id = d.id AND s.is_active = TRUE) AS student_count,
 
-        (SELECT COUNT(*)::int
-           FROM lecturers l
-          WHERE l.department_id = d.id
-            AND l.is_active = TRUE)                                  AS lecturer_count,
+        (SELECT COUNT(*)::int FROM lecturers l
+          WHERE l.department_id = d.id AND l.is_active = TRUE) AS lecturer_count,
 
-        (SELECT COUNT(*)::int
-           FROM courses c
-          WHERE c.department_id = d.id
-            AND c.is_active = TRUE)                                  AS course_count,
+        (SELECT COUNT(*)::int FROM courses c
+          WHERE c.department_id = d.id AND c.is_active = TRUE) AS course_count,
 
-        (SELECT COUNT(*)::int
-           FROM course_registrations cr
+        (SELECT COUNT(*)::int FROM course_registrations cr
            JOIN students s ON s.id = cr.student_id
-          WHERE s.department_id = d.id
-            AND cr.status = 'registered')                            AS pending_registrations,
+          WHERE s.department_id = d.id AND cr.status = 'registered') AS pending_registrations,
 
-        (SELECT COUNT(*)::int
-           FROM results r
+        (SELECT COUNT(*)::int FROM results r
            JOIN courses c ON c.id = r.course_id
           WHERE c.department_id = d.id
             AND r.submission_status = 'approved'
-            AND r.is_published = FALSE)                              AS pending_publish,
+            AND r.is_published = FALSE) AS pending_publish,
 
-        (SELECT COUNT(*)::int
-           FROM risk_assessments ra
+        (SELECT COUNT(*)::int FROM risk_assessments ra
            JOIN students s ON s.id = ra.student_id
           WHERE s.department_id = d.id
             AND ra.risk_category IN ('ORANGE','RED')
             AND ra.assessed_at = (
-              SELECT MAX(assessed_at)
-                FROM risk_assessments
-               WHERE student_id = ra.student_id
-            ))                                                       AS high_risk_count
+              SELECT MAX(assessed_at) FROM risk_assessments WHERE student_id = ra.student_id
+            )) AS high_risk_count
 
       FROM departments d
       LEFT JOIN users u ON u.id = d.hod_id
       WHERE d.is_active = TRUE
       ORDER BY d.name
     `);
-
     res.json({ success: true, data: r.rows });
   } catch (err) { next(err); }
 }

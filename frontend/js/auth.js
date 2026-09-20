@@ -1,15 +1,11 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Auth Pages Script
 // Shared logic for login, register, forgot, reset.
-// Talks to /api/auth/* and stores JWT in localStorage.
 // ============================================================
 
 'use strict';
 
 (function () {
-  /* ============================================================
-     HELPERS
-     ============================================================ */
   const $  = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -26,9 +22,6 @@
     student:  '/student/dashboard.html',
   };
 
-  /**
-   * Show a message element (.msg) with the correct class.
-   */
   function showMsg(el, text, type = 'error') {
     if (!el) return;
     el.className = `msg msg-${type} show`;
@@ -40,9 +33,6 @@
     el.textContent = '';
   }
 
-  /**
-   * Set a button to loading state.
-   */
   function setLoading(btn, loading, defaultText) {
     if (!btn) return;
     if (loading) {
@@ -55,26 +45,17 @@
     }
   }
 
-  /**
-   * Save auth info to localStorage.
-   */
   function persistAuth(user, token) {
     localStorage.setItem(STORAGE.TOKEN, token);
     localStorage.setItem(STORAGE.ROLE,  user.role);
     localStorage.setItem(STORAGE.USER,  JSON.stringify(user));
   }
 
-  /**
-   * Redirect to the correct dashboard based on role.
-   */
   function redirectToDashboard(role) {
     const target = DASHBOARDS[role] || '/';
     window.location.href = target;
   }
 
-  /**
-   * Wrapper around fetch that returns { ok, status, data }.
-   */
   async function api(path, options = {}) {
     const res = await fetch(path, {
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
@@ -85,9 +66,7 @@
     return { ok: res.ok, status: res.status, data };
   }
 
-  /* ============================================================
-     PASSWORD VISIBILITY TOGGLE
-     ============================================================ */
+  /* Password visibility toggle */
   $$('.pw-toggle').forEach((btn) => {
     btn.addEventListener('click', () => {
       const target = document.getElementById(btn.dataset.target);
@@ -98,21 +77,16 @@
     });
   });
 
-  /* ============================================================
-     IF ALREADY LOGGED IN → REDIRECT
-     (skip on reset-password page since token is in URL)
-     ============================================================ */
+  /* Redirect if already logged in */
   const page = document.body.dataset.page || '';
   const existingToken = localStorage.getItem(STORAGE.TOKEN);
   const existingRole  = localStorage.getItem(STORAGE.ROLE);
 
   if (existingToken && existingRole && page !== 'reset') {
-    // Verify token still valid before redirecting
     api('/api/auth/me', { headers: { Authorization: `Bearer ${existingToken}` } })
       .then(({ ok }) => {
         if (ok) redirectToDashboard(existingRole);
         else {
-          // Stale token — clear it
           localStorage.removeItem(STORAGE.TOKEN);
           localStorage.removeItem(STORAGE.ROLE);
           localStorage.removeItem(STORAGE.USER);
@@ -121,9 +95,7 @@
       .catch(() => { /* offline — stay on login */ });
   }
 
-  /* ============================================================
-     LOGIN PAGE
-     ============================================================ */
+  /* LOGIN */
   const loginForm = $('#loginForm');
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
@@ -156,7 +128,6 @@
         const { user, token } = data.data;
         persistAuth(user, token);
         showMsg(msgEl, `Welcome back, ${user.full_name.split(' ')[0]}! Redirecting...`, 'success');
-
         setTimeout(() => redirectToDashboard(user.role), 700);
       } catch (err) {
         showMsg(msgEl, 'Network error. Please check your connection.', 'error');
@@ -165,9 +136,7 @@
     });
   }
 
-  /* ============================================================
-     REGISTER PAGE — tab switching
-     ============================================================ */
+  /* REGISTER — tab switching */
   const tabs = $$('.tab');
   const roleInput = $('#role');
   const studentFields = $$('.role-student');
@@ -182,19 +151,15 @@
 
   if (tabs.length) {
     tabs.forEach(t => t.addEventListener('click', () => activateRole(t.dataset.role)));
-    // Default to student
     activateRole('student');
   }
 
-  /* ---------- REGISTER: load departments & programmes ---------- */
+  /* Departments / programmes */
   const deptSelect = $('#department_id');
   const progSelect = $('#programme_id');
 
   async function loadDepartments() {
     if (!deptSelect) return;
-    // Public endpoint — we'll create it in the admin routes later.
-    // For now, we fetch from a temporary /api/auth/departments endpoint
-    // which we'll add below in authRoutes.
     try {
       const { ok, data } = await api('/api/auth/departments');
       if (ok && data && Array.isArray(data.data)) {
@@ -225,7 +190,7 @@
     deptSelect.addEventListener('change', () => loadProgrammes(deptSelect.value));
   }
 
-  /* ---------- REGISTER: submit ---------- */
+  /* REGISTER submit */
   const registerForm = $('#registerForm');
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
@@ -234,48 +199,45 @@
       const btn = $('#registerBtn');
       hideMsg(msgEl);
 
-          const invToken = new URLSearchParams(location.search).get('invite');
-    if (invToken) {
-      const msgEl = document.getElementById('registerMsg');
-      const btn = document.getElementById('registerBtn');
-      hideMsg(msgEl);
+      // Invite flow
+      const invToken = new URLSearchParams(location.search).get('invite');
+      if (invToken) {
+        const payload = {
+          token: invToken,
+          full_name: document.getElementById('full_name').value.trim(),
+          password: document.getElementById('password').value,
+          phone: document.getElementById('phone').value.trim() || null,
+          department_id: parseInt(document.getElementById('department_id')?.value, 10) || null,
+          programme_id: parseInt(document.getElementById('programme_id')?.value, 10) || null,
+          level: parseInt(document.getElementById('level')?.value, 10) || null,
+          admission_year: parseInt(document.getElementById('admission_year')?.value, 10) || null,
+          staff_id: document.getElementById('staff_id')?.value.trim() || null,
+          title: document.getElementById('title')?.value.trim() || null,
+        };
 
-      const payload = {
-        token: invToken,
-        full_name: document.getElementById('full_name').value.trim(),
-        password: document.getElementById('password').value,
-        phone: document.getElementById('phone').value.trim() || null,
-        matric_no: document.getElementById('matric_no')?.value.trim() || null,
-        department_id: parseInt(document.getElementById('department_id')?.value, 10) || null,
-        programme_id: parseInt(document.getElementById('programme_id')?.value, 10) || null,
-        level: parseInt(document.getElementById('level')?.value, 10) || null,
-        admission_year: parseInt(document.getElementById('admission_year')?.value, 10) || null,
-        staff_id: document.getElementById('staff_id')?.value.trim() || null,
-        title: document.getElementById('title')?.value.trim() || null,
-      };
-
-      setLoading(btn, true);
-      try {
-        const { ok, data } = await api('/api/auth/accept-invite', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-        if (!ok) {
-          showMsg(msgEl, data?.error || 'Registration failed.', 'error');
+        setLoading(btn, true);
+        try {
+          const { ok, data } = await api('/api/auth/accept-invite', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          if (!ok) {
+            showMsg(msgEl, data?.error || 'Registration failed.', 'error');
+            setLoading(btn, false);
+            return;
+          }
+          const { user, token } = data.data;
+          persistAuth(user, token);
+          showMsg(msgEl, '✅ Welcome! Redirecting...', 'success');
+          setTimeout(() => redirectToDashboard(user.role), 800);
+        } catch (err) {
+          showMsg(msgEl, 'Network error.', 'error');
           setLoading(btn, false);
-          return;
         }
-        const { user, token } = data.data;
-        persistAuth(user, token);
-        showMsg(msgEl, '✅ Welcome! Redirecting...', 'success');
-        setTimeout(() => redirectToDashboard(user.role), 800);
-      } catch (err) {
-        showMsg(msgEl, 'Network error.', 'error');
-        setLoading(btn, false);
+        return;
       }
-      return;
-    }
 
+      // Normal registration — matric_no is NOT sent, server generates it
       const role = roleInput.value;
       const payload = {
         role,
@@ -287,16 +249,14 @@
       };
 
       if (role === 'student') {
-        payload.matric_no    = $('#matric_no').value.trim();
-        payload.programme_id = parseInt($('#programme_id').value, 10) || null;
-        payload.level        = parseInt($('#level').value, 10) || null;
+        payload.programme_id   = parseInt($('#programme_id').value, 10) || null;
+        payload.level          = parseInt($('#level').value, 10) || null;
         payload.admission_year = parseInt($('#admission_year').value, 10) || null;
       } else {
         payload.staff_id = $('#staff_id').value.trim();
         payload.title    = $('#title').value.trim() || null;
       }
 
-      // Basic client checks
       if (!payload.full_name || !payload.email || !payload.password) {
         return showMsg(msgEl, 'Please fill in all required fields.', 'error');
       }
@@ -322,15 +282,19 @@
           return;
         }
 
-      if (data.data.pending) {
-        showMsg(msgEl, '✅ Registration successful! Your account is pending admin approval. You will receive an email once activated.', 'success');
-        return;
-      }
+        if (data.data.pending) {
+          let extra = '';
+          if (data.data.matric_no) {
+            extra = ` Your matric number is ${data.data.matric_no}.`;
+          }
+          showMsg(msgEl, `✅ Registration successful!${extra} Your account is pending admin approval. You will receive an email and SMS once activated.`, 'success');
+          return;
+        }
 
-      const { user, token } = data.data;
-      persistAuth(user, token);
-      showMsg(msgEl, 'Account created! Redirecting to your dashboard...', 'success');
-      setTimeout(() => redirectToDashboard(user.role), 800);
+        const { user, token } = data.data;
+        persistAuth(user, token);
+        showMsg(msgEl, 'Account created! Redirecting...', 'success');
+        setTimeout(() => redirectToDashboard(user.role), 800);
       } catch (err) {
         showMsg(msgEl, 'Network error. Please try again.', 'error');
         setLoading(btn, false);
@@ -338,9 +302,7 @@
     });
   }
 
-  /* ============================================================
-     FORGOT PASSWORD PAGE
-     ============================================================ */
+  /* FORGOT PASSWORD */
   const forgotForm = $('#forgotForm');
   if (forgotForm) {
     forgotForm.addEventListener('submit', async (e) => {
@@ -365,9 +327,8 @@
           return;
         }
 
-        showMsg(msgEl, 'If that email exists, a reset link has been sent. Check your inbox (or the server console in dev).', 'success');
+        showMsg(msgEl, 'If that email exists, a reset link has been sent. Check your inbox.', 'success');
 
-        // In development, the server includes a dev_link for quick testing
         if (data && data.dev_link) {
           const link = document.createElement('div');
           link.innerHTML = `<br><strong>Dev link:</strong> <a class="link" href="${data.dev_link}">${data.dev_link}</a>`;
@@ -382,12 +343,9 @@
     });
   }
 
-  /* ============================================================
-     RESET PASSWORD PAGE
-     ============================================================ */
+  /* RESET PASSWORD */
   const resetForm = $('#resetForm');
   if (resetForm) {
-    // Pull token from query string
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     const msgEl = $('#resetMsg');

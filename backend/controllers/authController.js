@@ -2,7 +2,8 @@
 // SMARTACADEMIC — Authentication Controller
 // Handles register (student / lecturer), login, me, logout,
 // forgot-password, reset-password, invite, accept-invite.
-// Now dispatches email + SMS + in-app on registration.
+// Student matric numbers are auto-generated on registration.
+// Sends email + SMS + in-app notifications.
 // ============================================================
 
 'use strict';
@@ -17,7 +18,6 @@ const { AppError } = require('../middleware/errorHandler');
 const { signToken } = require('../middleware/auth');
 
 // In-memory store for password reset tokens (dev only).
-// In production, replace with a `password_resets` table.
 const resetTokens = new Map();
 
 // In-memory store for invitation tokens (dev only).
@@ -32,16 +32,18 @@ const inviteStore = new Map();
  *   role: 'student' | 'lecturer',
  *   full_name, email, phone, password,
  *   // student:
- *   matric_no, department_id, programme_id, level, admission_year,
+ *   department_id, programme_id, level, admission_year,
  *   // lecturer:
  *   staff_id, department_id, title
  * }
+ *
+ * Student matric number is AUTO-GENERATED.
  */
 async function register(req, res, next) {
   try {
     const {
       role, full_name, email, phone, password,
-      matric_no, department_id, programme_id, level, admission_year,
+      department_id, programme_id, level, admission_year,
       staff_id, title,
     } = req.body;
 
@@ -49,25 +51,19 @@ async function register(req, res, next) {
       throw new AppError('Only student or lecturer registration is allowed. Contact admin for other roles.', 400);
     }
 
-    // Email uniqueness
     const existing = await userModel.findByEmail(email);
     if (existing) throw new AppError('Email already registered.', 409);
 
-    // Department check
     if (!(await userModel.departmentExists(department_id))) {
       throw new AppError('Invalid department.', 400);
     }
 
-    // Role-specific checks
     if (role === 'student') {
-      if (!matric_no) throw new AppError('Matric number is required.', 400);
+      // matric_no is auto-generated — not taken from the request
       if (!programme_id) throw new AppError('Programme is required.', 400);
       if (!level) throw new AppError('Level is required.', 400);
       if (!(await userModel.programmeExists(programme_id))) {
         throw new AppError('Invalid programme.', 400);
-      }
-      if (await userModel.matricExists(matric_no)) {
-        throw new AppError('Matric number already in use.', 409);
       }
     } else {
       if (!staff_id) throw new AppError('Staff ID is required.', 400);
@@ -76,32 +72,67 @@ async function register(req, res, next) {
       }
     }
 
-    // Hash password
     const password_hash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
 
-    // Role id
     const role_id = await userModel.getRoleIdByName(role);
     if (!role_id) throw new AppError('Role not found.', 500);
 
-    // Create user as INACTIVE — pending admin approval
-    const user_id = await db.query(
-      `INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
-       VALUES ($1, $2, $3, $4, $5, FALSE)
-       RETURNING id`,
-      [full_name, email.toLowerCase(), phone || null, password_hash, role_id]
-    ).then(r => r.rows[0].id);
+    // Create user + profile in a transaction so the matric serial is safe
+    const client = await db.pool.connect();
+    let user_id;
+    let generated_matric = null;
 
-    // Insert profile
-    if (role === 'student') {
-      await userModel.createStudentProfile({
-        user_id, matric_no, department_id, programme_id,
-        level, admission_year: admission_year || new Date().getFullYear(),
-      });
-    } else {
-      await userModel.createLecturerProfile({
-        user_id, staff_id, department_id, title,
-      });
+    try {
+      await client.query('BEGIN');
+
+      const u = await client.query(
+        `INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
+         VALUES ($1, $2, $3, $4, $5, FALSE)
+         RETURNING id`,
+        [full_name, email.toLowerCase(), phone || null, password_hash, role_id]
+      );
+      user_id = u.rows[0].id;
+
+      if (role === 'student') {
+        const matricGenerator = require('../utils/matricGenerator');
+        generated_matric = await matricGenerator.generateMatric({
+          departmentId: department_id,
+          programmeId:  programme_id,
+          admissionYear: admission_year || new Date().getFullYear(),
+          client,
+        });
+
+        await client.query(
+          `INSERT INTO students
+             (user_id, matric_no, department_id, programme_id, level, admission_year)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            user_id,
+            generated_matric,
+            department_id,
+            programme_id,
+            level,
+            admission_year || new Date().getFullYear(),
+          ]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO lecturers (user_id, staff_id, department_id, title)
+           VALUES ($1, $2, $3, $4)`,
+          [user_id, staff_id, department_id, title || null]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
     }
+
+    console.log('[register] New user id:', user_id,
+      role === 'student' ? `· matric: ${generated_matric}` : '');
 
     // Notify admins in-app
     try {
@@ -119,9 +150,7 @@ async function register(req, res, next) {
 
     const user = await userModel.findById(user_id);
 
-    // ------------------------------------------------------------
     // Notify the registrant: email + SMS + in-app
-    // ------------------------------------------------------------
     try {
       const dispatcher = require('../services/notificationDispatcher');
 
@@ -137,9 +166,13 @@ async function register(req, res, next) {
           <div style="background:#fff;padding:30px;border-radius:0 0 12px 12px;">
             <p style="font-size:15px;color:#0f172a;">Hi ${firstName},</p>
             <p style="font-size:14.5px;color:#334155;line-height:1.6;">
-              Thanks for registering with SMARTACADEMIC. Your account has been created and is
-              <strong>pending approval</strong> by our admin team.
+              Thanks for registering with SMARTACADEMIC. Your account has been created
+              and is <strong>pending approval</strong> by our admin team.
             </p>
+            ${generated_matric ? `
+              <p style="background:#f0fdf4;padding:14px;border-radius:8px;font-family:monospace;font-size:14px;color:#166534;text-align:center;">
+                <strong>Your Matric Number:</strong><br>${generated_matric}
+              </p>` : ''}
             <p style="font-size:14.5px;color:#334155;line-height:1.6;">
               You'll receive another email and SMS the moment your account is approved.
               Until then, you won't be able to log in.
@@ -156,7 +189,9 @@ async function register(req, res, next) {
           </div>
         </div>`;
 
-      const smsText = `Hi ${firstName}, your SMARTACADEMIC account was received and is pending approval. You'll be notified once approved.`;
+      const smsText = generated_matric
+        ? `Hi ${firstName}, your SMARTACADEMIC account was received. Matric: ${generated_matric}. Pending approval.`
+        : `Hi ${firstName}, your SMARTACADEMIC account was received. Pending approval.`;
 
       await dispatcher.notify({
         userId: user_id,
@@ -166,7 +201,9 @@ async function register(req, res, next) {
         emailHtml,
         smsText,
         inAppTitle: 'Registration received',
-        inAppMessage: 'Your account is pending admin approval. You will be notified shortly.',
+        inAppMessage: generated_matric
+          ? `Your matric number is ${generated_matric}. Pending admin approval.`
+          : 'Your account is pending admin approval. You will be notified shortly.',
         inAppType: 'system',
       });
     } catch (e) {
@@ -176,7 +213,7 @@ async function register(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Registration successful! Your account is pending admin approval. You will be notified via email and SMS once it is active.',
-      data: { user: sanitizeUser(user), pending: true },
+      data: { user: sanitizeUser(user), matric_no: generated_matric, pending: true },
     });
   } catch (err) { next(err); }
 }
@@ -202,23 +239,19 @@ async function login(req, res, next) {
     res.json({
       success: true,
       message: 'Login successful.',
-      data: {
-        user: sanitizeUser(user),
-        token,
-      },
+      data: { user: sanitizeUser(user), token },
     });
   } catch (err) { next(err); }
 }
 
 // ============================================================
-// ME — returns current user from JWT
+// ME
 // ============================================================
 async function me(req, res, next) {
   try {
     const user = await userModel.findById(req.user.id);
     if (!user) throw new AppError('User not found.', 404);
 
-    // Attach role-specific profile
     let profile = null;
 
     if (user.role_name === 'student') {
@@ -253,18 +286,12 @@ async function me(req, res, next) {
       profile = r.rows[0] || null;
     }
 
-    res.json({
-      success: true,
-      data: {
-        user: sanitizeUser(user),
-        profile,
-      },
-    });
+    res.json({ success: true, data: { user: sanitizeUser(user), profile } });
   } catch (err) { next(err); }
 }
 
 // ============================================================
-// LOGOUT  (JWT is stateless — client discards the token)
+// LOGOUT
 // ============================================================
 async function logout(req, res) {
   res.json({ success: true, message: 'Logged out.' });
@@ -278,7 +305,6 @@ async function forgotPassword(req, res, next) {
     const { email } = req.body;
     const user = await userModel.findByEmail(email);
 
-    // Always return 200 to avoid user enumeration
     if (!user) {
       return res.json({
         success: true,
@@ -289,7 +315,7 @@ async function forgotPassword(req, res, next) {
     const token = crypto.randomBytes(32).toString('hex');
     resetTokens.set(token, {
       userId: user.id,
-      expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+      expiresAt: Date.now() + 60 * 60 * 1000,
     });
 
     const resetLink = `${env.CLIENT_URL}/reset-password.html?token=${token}`;
@@ -346,7 +372,7 @@ async function sendInvite(req, res, next) {
       email: email.toLowerCase(),
       full_name: full_name || '',
       role,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       created_by: req.user.id,
     });
 
@@ -399,7 +425,7 @@ async function acceptInvite(req, res, next) {
   try {
     const {
       token, password, full_name, phone,
-      matric_no, department_id, programme_id, level, admission_year,
+      department_id, programme_id, level, admission_year,
       staff_id, title,
     } = req.body;
 
@@ -416,41 +442,60 @@ async function acceptInvite(req, res, next) {
     const password_hash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
     const role_id = await userModel.getRoleIdByName(entry.role);
 
-    // Create user directly ACTIVE
-    const user = await db.query(`
-      INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
-      VALUES ($1, $2, $3, $4, $5, TRUE)
-      RETURNING id
-    `, [full_name || entry.full_name, entry.email, phone || null, password_hash, role_id]).then(r => r.rows[0]);
+    const client = await db.pool.connect();
+    let user_id, generated_matric = null;
 
-    // Create profile
-    if (entry.role === 'student') {
-      await userModel.createStudentProfile({
-        user_id: user.id,
-        matric_no,
-        department_id,
-        programme_id,
-        level,
-        admission_year: admission_year || new Date().getFullYear(),
-      });
-    } else if (entry.role === 'lecturer') {
-      await userModel.createLecturerProfile({
-        user_id: user.id,
-        staff_id,
-        department_id,
-        title,
-      });
+    try {
+      await client.query('BEGIN');
+
+      const u = await client.query(
+        `INSERT INTO users (full_name, email, phone, password_hash, role_id, is_active)
+         VALUES ($1, $2, $3, $4, $5, TRUE)
+         RETURNING id`,
+        [full_name || entry.full_name, entry.email, phone || null, password_hash, role_id]
+      );
+      user_id = u.rows[0].id;
+
+      if (entry.role === 'student') {
+        const matricGenerator = require('../utils/matricGenerator');
+        generated_matric = await matricGenerator.generateMatric({
+          departmentId: department_id,
+          programmeId:  programme_id,
+          admissionYear: admission_year || new Date().getFullYear(),
+          client,
+        });
+        await client.query(
+          `INSERT INTO students
+             (user_id, matric_no, department_id, programme_id, level, admission_year)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [user_id, generated_matric, department_id, programme_id, level,
+           admission_year || new Date().getFullYear()]
+        );
+      } else if (entry.role === 'lecturer') {
+        await client.query(
+          `INSERT INTO lecturers (user_id, staff_id, department_id, title)
+           VALUES ($1, $2, $3, $4)`,
+          [user_id, staff_id, department_id, title || null]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
     }
 
     inviteStore.delete(token);
 
-    const fullUser = await userModel.findById(user.id);
+    const fullUser = await userModel.findById(user_id);
     const jwt = signToken(fullUser);
 
     res.status(201).json({
       success: true,
       message: 'Account created.',
-      data: { user: sanitizeUser(fullUser), token: jwt },
+      data: { user: sanitizeUser(fullUser), matric_no: generated_matric, token: jwt },
     });
   } catch (err) { next(err); }
 }
@@ -471,9 +516,6 @@ function sanitizeUser(user) {
   };
 }
 
-// ============================================================
-// EXPORTS
-// ============================================================
 module.exports = {
   register,
   login,

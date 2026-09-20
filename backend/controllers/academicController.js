@@ -1,13 +1,14 @@
 // ============================================================
 // SMARTACADEMIC — Academic Controller
-// Departments, Programmes, Students, Lecturers.
+// Departments, Programmes, Students, Lecturers, Courses, ...
+// Students' matric numbers are auto-generated when not provided.
 // ============================================================
 
 'use strict';
 
 const bcrypt = require('bcryptjs');
 const env = require('../config/env');
-const db = require('../config/db'); 
+const db = require('../config/db');
 const model = require('../models/academicModel');
 const adminModel = require('../models/adminModel');
 const { AppError } = require('../middleware/errorHandler');
@@ -108,17 +109,72 @@ async function listStudents(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/**
+ * POST /api/admin/students
+ * Auto-generates matric_no if not provided.
+ */
 async function createStudent(req, res, next) {
   try {
-    const { password, ...rest } = req.body;
+    const { password, matric_no, ...rest } = req.body;
     const password_hash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
-    const r = await model.createStudent({ ...rest, password_hash });
-    await adminModel.writeAudit({ user_id: req.user.id, action: 'create_student', module: 'students', affected_record: `student:${r.student_id}` });
-    res.status(201).json({ success: true, message: 'Student created.', data: r });
-  } catch (err) {
-    if (err.code === '23505') return next(new AppError('Email or matric number already exists.', 409));
-    next(err);
-  }
+
+    const client = await db.pool.connect();
+    let studentId, generatedMatric;
+
+    try {
+      await client.query('BEGIN');
+
+      const roleRow = await client.query("SELECT id FROM roles WHERE name = 'student'");
+      const u = await client.query(
+        `INSERT INTO users (full_name, email, phone, password_hash, role_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [rest.full_name, rest.email.toLowerCase(), rest.phone || null,
+         password_hash, roleRow.rows[0].id]
+      );
+      const userId = u.rows[0].id;
+
+      const matricGenerator = require('../utils/matricGenerator');
+      generatedMatric = matric_no || await matricGenerator.generateMatric({
+        departmentId: rest.department_id,
+        programmeId:  rest.programme_id,
+        admissionYear: rest.admission_year || new Date().getFullYear(),
+        client,
+      });
+
+      const s = await client.query(
+        `INSERT INTO students
+           (user_id, matric_no, department_id, programme_id, level, admission_year)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [userId, generatedMatric, rest.department_id, rest.programme_id,
+         rest.level, rest.admission_year || new Date().getFullYear()]
+      );
+      studentId = s.rows[0].id;
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      if (e.code === '23505') {
+        return next(new AppError('Email or matric number already exists.', 409));
+      }
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    await adminModel.writeAudit({
+      user_id: req.user.id,
+      action: 'create_student',
+      module: 'students',
+      affected_record: `student:${studentId}`,
+      details: { matric_no: generatedMatric },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Student created.',
+      data: { student_id: studentId, matric_no: generatedMatric },
+    });
+  } catch (err) { next(err); }
 }
 
 async function updateStudent(req, res, next) {
@@ -200,6 +256,7 @@ async function listCourses(req, res, next) {
     res.json({ success: true, data: items });
   } catch (err) { next(err); }
 }
+
 async function createCourse(req, res, next) {
   try {
     const r = await model.createCourse(req.body);
@@ -207,12 +264,14 @@ async function createCourse(req, res, next) {
     res.status(201).json({ success: true, data: r });
   } catch (err) { next(err); }
 }
+
 async function updateCourse(req, res, next) {
   try {
     await model.updateCourse(parseInt(req.params.id, 10), req.body);
     res.json({ success: true, message: 'Course updated.' });
   } catch (err) { next(err); }
 }
+
 async function deleteCourse(req, res, next) {
   try {
     await model.deleteCourse(parseInt(req.params.id, 10));
@@ -222,7 +281,8 @@ async function deleteCourse(req, res, next) {
 
 /* ============ SESSIONS ============ */
 async function listSessions(req, res, next) {
-  try { res.json({ success: true, data: await model.listSessions() }); } catch (err) { next(err); }
+  try { res.json({ success: true, data: await model.listSessions() }); }
+  catch (err) { next(err); }
 }
 async function createSession(req, res, next) {
   try {

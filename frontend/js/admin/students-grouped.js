@@ -1,5 +1,6 @@
 // ============================================================
 // SMARTACADEMIC — Admin Students (grouped by department)
+// Matric numbers are auto-generated on creation.
 // ============================================================
 
 'use strict';
@@ -11,13 +12,13 @@
   const state = {
     departments: [],
     search: '',
-    meta: null,   // map of dept id -> { department }
+    meta: null,
     acc: null,
-    allStudents: [], // cache for search
+    allStudents: [],
   };
 
   /* ============================================================
-     LOAD DEPARTMENTS OVERVIEW + ALL STUDENTS
+     LOAD
      ============================================================ */
   async function load() {
     const host = $('#accordionHost');
@@ -36,7 +37,6 @@
     state.departments = deptRes.data.data;
     state.allStudents = studentsRes.data.data.items || [];
 
-    // Build a quick lookup: department_id -> students[]
     const byDept = new Map();
     for (const s of state.allStudents) {
       if (!byDept.has(s.department_id)) byDept.set(s.department_id, []);
@@ -76,7 +76,6 @@
 
     acc.render(items);
 
-    // Wire department-level header actions
     document.querySelectorAll('[data-dept-new]').forEach(b =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -90,7 +89,7 @@
   }
 
   /* ============================================================
-     TABLE INSIDE EACH DEPARTMENT
+     TABLE
      ============================================================ */
   function renderStudentTable(students, dept) {
     if (!students.length) {
@@ -154,15 +153,12 @@
       b.addEventListener('click', () => doDelete(parseInt(b.dataset.del, 10), dept)));
   }
 
-  /* ============================================================
-     FIND A STUDENT BY ID (for edit/delete)
-     ============================================================ */
   function findStudent(id) {
     return state.allStudents.find(s => s.id === id);
   }
 
   /* ============================================================
-     CREATE / EDIT / DELETE
+     CREATE — no matric input (auto-generated)
      ============================================================ */
   async function openCreate(departmentId) {
     const { ok, data } = await api('/api/admin/programmes?department_id=' + departmentId);
@@ -178,7 +174,12 @@
         <div class="field"><label>Full name *</label><input class="input" id="f_full_name" /></div>
         <div class="field"><label>Email *</label><input class="input" id="f_email" type="email" /></div>
         <div class="field"><label>Phone</label><input class="input" id="f_phone" /></div>
-        <div class="field"><label>Matric number *</label><input class="input" id="f_matric" /></div>
+
+        <div class="msg msg-info show" style="margin:10px 0;font-size:13px;">
+          🎓 The matric number will be <strong>generated automatically</strong>
+          (FPU/&lt;SCHOOL&gt;/&lt;DEPT&gt;/&lt;LEVEL&gt;/&lt;YY&gt;/&lt;NNN&gt;).
+        </div>
+
         <div class="field"><label>Programme *</label>
           <select class="select" id="f_programme">
             ${programmes.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
@@ -199,20 +200,25 @@
           full_name: bd.querySelector('#f_full_name').value.trim(),
           email: bd.querySelector('#f_email').value.trim(),
           phone: bd.querySelector('#f_phone').value.trim() || null,
-          matric_no: bd.querySelector('#f_matric').value.trim(),
           department_id: departmentId,
           programme_id: parseInt(bd.querySelector('#f_programme').value, 10),
           level: parseInt(bd.querySelector('#f_level').value, 10),
           admission_year: parseInt(bd.querySelector('#f_year').value, 10),
           password: bd.querySelector('#f_password').value,
+          // matric_no deliberately omitted — server generates it
         };
         const { ok, data } = await api('/api/admin/students', { method: 'POST', body: JSON.stringify(payload) });
         if (!ok) { alert(data?.error || 'Failed'); return; }
-        close(); toast('Student created'); load();
+        close();
+        toast(`Student created · ${data.data.matric_no || ''}`);
+        load();
       },
     });
   }
 
+  /* ============================================================
+     EDIT — matric field kept so admins can override for legacy
+     ============================================================ */
   async function openEdit(studentId, dept) {
     const s = findStudent(studentId);
     if (!s) return;
@@ -228,7 +234,11 @@
         <div class="field"><label>Full name</label><input class="input" id="f_full_name" value="${esc(s.full_name)}" /></div>
         <div class="field"><label>Email</label><input class="input" id="f_email" type="email" value="${esc(s.email)}" /></div>
         <div class="field"><label>Phone</label><input class="input" id="f_phone" value="${esc(s.phone || '')}" /></div>
-        <div class="field"><label>Matric number</label><input class="input" id="f_matric" value="${esc(s.matric_no)}" /></div>
+        <div class="field"><label>Matric number</label><input class="input" id="f_matric" value="${esc(s.matric_no)}" />
+          <p style="font-size:12px;color:var(--ink-3);margin-top:4px;">
+            Change only for legacy overrides. Format: FPU/&lt;SCHOOL&gt;/&lt;DEPT&gt;/&lt;LEVEL&gt;/&lt;YY&gt;/&lt;NNN&gt;
+          </p>
+        </div>
         <div class="field"><label>Programme</label>
           <select class="select" id="f_programme">
             ${programmes.map(p => `<option value="${p.id}" ${p.id === s.programme_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
@@ -277,7 +287,7 @@
   }
 
   /* ============================================================
-     CSV IMPORT (per department)
+     CSV IMPORT
      ============================================================ */
   function openImportModal(departmentId) {
     const dept = state.departments.find(d => d.id === departmentId);
@@ -289,15 +299,15 @@
       body: `
         <div class="msg msg-info show" style="margin-bottom:16px;">
           <strong>CSV format:</strong>
-          <code style="font-size:12px;">full_name,email,phone,matric_no,programme_code,level,admission_year</code>
+          <code style="font-size:12px;">full_name,email,phone,programme_code,level,admission_year</code>
           <br>
           <a href="/api/admin/students/import/template" download style="color:var(--primary);font-weight:600;margin-top:6px;display:inline-block;">
             📥 Download template
           </a>
+          <p style="font-size:13px;margin-top:8px;color:#1e40af;">
+            Matric numbers are auto-generated on import.
+          </p>
         </div>
-        <p style="color:var(--ink-3);font-size:14px;">
-          Emails will be sent to each student with their temporary password.
-        </p>
       `,
       onConfirm: async (_b, close) => {
         close();
@@ -349,7 +359,6 @@
 
     $('#btnNew').addEventListener('click', () => {
       if (state.departments.length === 0) return;
-      // Default to first department, or ask via a picker
       const options = state.departments.map(d =>
         `<option value="${d.id}">${esc(d.name)}</option>`).join('');
       openModal({
@@ -371,9 +380,7 @@
 
     $('#btnExpandAll').addEventListener('click', () => {
       document.querySelectorAll('.dept-card').forEach(card => {
-        if (!card.classList.contains('open')) {
-          card.querySelector('.dept-head')?.click();
-        }
+        if (!card.classList.contains('open')) card.querySelector('.dept-head')?.click();
       });
     });
 
@@ -384,9 +391,6 @@
     });
   }
 
-  /* ============================================================
-     BOOT
-     ============================================================ */
   function boot() {
     if (window.__adminStudentsBooted) return;
     window.__adminStudentsBooted = true;
