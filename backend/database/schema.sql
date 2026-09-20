@@ -552,5 +552,24 @@ INSERT INTO settings (key, value, category, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
+-- 21. NOTIFICATION LOG
+-- ============================================================
+CREATE TABLE IF NOT EXISTS notification_log (
+  id              SERIAL PRIMARY KEY,
+  user_id         INT REFERENCES users(id) ON DELETE SET NULL,
+  channel         VARCHAR(10) NOT NULL CHECK (channel IN ('email','sms','inapp')),
+  recipient       VARCHAR(150) NOT NULL,
+  subject         VARCHAR(200),
+  status          VARCHAR(20) NOT NULL CHECK (status IN ('sent','failed','skipped')),
+  error           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notif_log_user    ON notification_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_notif_log_channel ON notification_log(channel);
+CREATE INDEX IF NOT EXISTS idx_notif_log_status  ON notification_log(status);
+CREATE INDEX IF NOT EXISTS idx_notif_log_date    ON notification_log(created_at DESC);
+
+-- ============================================================
 -- END OF SCHEMA
 -- ============================================================
