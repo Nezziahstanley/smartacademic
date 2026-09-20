@@ -2,6 +2,7 @@
 // SMARTACADEMIC — Authentication Controller
 // Handles register (student / lecturer), login, me, logout,
 // forgot-password, reset-password, invite, accept-invite.
+// Now dispatches email + SMS + in-app on registration.
 // ============================================================
 
 'use strict';
@@ -102,7 +103,7 @@ async function register(req, res, next) {
       });
     }
 
-    // Notify admins
+    // Notify admins in-app
     try {
       const admins = await db.query(`
         SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id
@@ -111,16 +112,70 @@ async function register(req, res, next) {
       for (const a of admins.rows) {
         await db.query(`
           INSERT INTO notifications (user_id, title, message, type)
-          VALUES ($1, 'New student registration pending', $2, 'system')
+          VALUES ($1, 'New registration pending', $2, 'system')
         `, [a.id, `${full_name} (${email}) has registered and is awaiting your approval.`]);
       }
     } catch (e) { /* ignore */ }
 
     const user = await userModel.findById(user_id);
 
+    // ------------------------------------------------------------
+    // Notify the registrant: email + SMS + in-app
+    // ------------------------------------------------------------
+    try {
+      const dispatcher = require('../services/notificationDispatcher');
+
+      const loginUrl = `${env.CLIENT_URL || 'http://localhost:5000'}/login.html`;
+      const firstName = (full_name || '').split(' ')[0] || 'there';
+
+      const emailHtml = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f8fafc;padding:24px;">
+          <div style="background:#166534;padding:24px;border-radius:12px 12px 0 0;color:#fff;text-align:center;">
+            <h1 style="margin:0;font-size:20px;">SMARTACADEMIC</h1>
+            <p style="margin:6px 0 0;font-size:13px;opacity:.9;">Federal Polytechnic, Ugep</p>
+          </div>
+          <div style="background:#fff;padding:30px;border-radius:0 0 12px 12px;">
+            <p style="font-size:15px;color:#0f172a;">Hi ${firstName},</p>
+            <p style="font-size:14.5px;color:#334155;line-height:1.6;">
+              Thanks for registering with SMARTACADEMIC. Your account has been created and is
+              <strong>pending approval</strong> by our admin team.
+            </p>
+            <p style="font-size:14.5px;color:#334155;line-height:1.6;">
+              You'll receive another email and SMS the moment your account is approved.
+              Until then, you won't be able to log in.
+            </p>
+            <p style="margin:24px 0;text-align:center;">
+              <a href="${loginUrl}"
+                 style="background:#166534;color:#fff;padding:12px 26px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;">
+                Go to Login
+              </a>
+            </p>
+            <p style="font-size:12.5px;color:#94a3b8;text-align:center;margin-top:24px;">
+              If you didn't register, you can safely ignore this email.
+            </p>
+          </div>
+        </div>`;
+
+      const smsText = `Hi ${firstName}, your SMARTACADEMIC account was received and is pending approval. You'll be notified once approved.`;
+
+      await dispatcher.notify({
+        userId: user_id,
+        email: email.toLowerCase(),
+        phone: phone || null,
+        subject: 'Registration received — pending approval',
+        emailHtml,
+        smsText,
+        inAppTitle: 'Registration received',
+        inAppMessage: 'Your account is pending admin approval. You will be notified shortly.',
+        inAppType: 'system',
+      });
+    } catch (e) {
+      console.warn('[register] Notification dispatch failed:', e.message);
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Your account is pending admin approval. You will be notified via email once it is active.',
+      message: 'Registration successful! Your account is pending admin approval. You will be notified via email and SMS once it is active.',
       data: { user: sanitizeUser(user), pending: true },
     });
   } catch (err) { next(err); }
@@ -278,11 +333,6 @@ async function resetPassword(req, res, next) {
 // ============================================================
 // SEND INVITE
 // ============================================================
-/**
- * POST /api/auth/invite
- * Body: { email, full_name, role }
- * Sends an email with a unique registration link.
- */
 async function sendInvite(req, res, next) {
   try {
     const { email, full_name, role = 'student' } = req.body;
