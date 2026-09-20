@@ -1,6 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Auth Pages Script
 // Shared logic for login, register, forgot, reset.
+// Redirects to /login.html after successful registration.
 // ============================================================
 
 'use strict';
@@ -237,7 +238,7 @@
         return;
       }
 
-      // Normal registration — matric_no is NOT sent, server generates it
+      // Normal registration
       const role = roleInput.value;
       const payload = {
         role,
@@ -282,19 +283,20 @@
           return;
         }
 
-        if (data.data.pending) {
-          let extra = '';
-          if (data.data.matric_no) {
-            extra = ` Your matric number is ${data.data.matric_no}.`;
-          }
-          showMsg(msgEl, `✅ Registration successful!${extra} Your account is pending admin approval. You will receive an email and SMS once activated.`, 'success');
-          return;
+        // Registration is always pending (needs admin approval).
+        // Show the matric for a moment, then redirect to login.
+        let successText = '✅ Registration successful! Your account is pending admin approval.';
+        if (data.data.matric_no) {
+          successText += ` Your matric number is ${data.data.matric_no}.`;
         }
+        successText += ' Redirecting to login...';
 
-        const { user, token } = data.data;
-        persistAuth(user, token);
-        showMsg(msgEl, 'Account created! Redirecting...', 'success');
-        setTimeout(() => redirectToDashboard(user.role), 800);
+        showMsg(msgEl, successText, 'success');
+
+        // Give the user ~2.5s to read the matric, then go to login
+        setTimeout(() => {
+          window.location.href = '/login.html?registered=1';
+        }, 2500);
       } catch (err) {
         showMsg(msgEl, 'Network error. Please try again.', 'error');
         setLoading(btn, false);
@@ -393,5 +395,17 @@
         setLoading(btn, false);
       }
     });
+  }
+
+  /* LOGIN PAGE — show a friendly banner if arriving from registration */
+  if (page === 'login') {
+    const params = new URLSearchParams(location.search);
+    if (params.get('registered') === '1') {
+      const msgEl = document.getElementById('loginMsg');
+      if (msgEl) {
+        msgEl.className = 'msg msg-success show';
+        msgEl.innerHTML = '✅ Registration received! Your account is pending admin approval. You will receive an email once it is activated, then you can log in.';
+      }
+    }
   }
 })();
