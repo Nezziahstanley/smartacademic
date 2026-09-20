@@ -1,6 +1,8 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Auth Routes
 // Mounted at /api/auth.
+// Student matric numbers are auto-generated; no matric field
+// is accepted or required from the register form.
 // ============================================================
 
 'use strict';
@@ -26,7 +28,6 @@ router.post(
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('phone').optional().trim().isLength({ min: 7, max: 20 }),
   body('department_id').isInt({ min: 1 }).withMessage('Valid department required'),
-  body('matric_no').if(body('role').equals('student')).notEmpty(),
   body('programme_id').if(body('role').equals('student')).isInt({ min: 1 }),
   body('level').if(body('role').equals('student')).isInt({ min: 100, max: 700 }),
   body('staff_id').if(body('role').equals('lecturer')).notEmpty(),
@@ -106,6 +107,9 @@ router.get('/programmes', asyncHandler(async (req, res) => {
   res.json({ success: true, data: r.rows });
 }));
 
+// ============================================================
+// INVITES
+// ============================================================
 const { requireRole } = require('../middleware/role');
 
 router.post('/invite',
