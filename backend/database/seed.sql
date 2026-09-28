@@ -25,7 +25,7 @@ ON CONFLICT (name) DO NOTHING;
 -- ---------- PROGRAMMES ----------
 -- (department_id resolved at runtime by seed-db.js)
 -- Computer Science:
---   B.Sc. Computer Science
+--   ND Computer Science
 --   B.Sc. Software Engineering
 -- Mathematics:
 --   B.Sc. Mathematics
@@ -51,15 +51,13 @@ ON CONFLICT (name) DO NOTHING;
 -- First  (of 2024/2025) — active
 -- Second (of 2024/2025) — inactive
 
--- ---------- COURSES (Computer Science, 300 Level, First semester) ----------
--- CSC301  Data Structures & Algorithms    3 units
--- CSC303  Operating Systems               3 units
--- CSC305  Database Management Systems     3 units
--- CSC307  Software Engineering            3 units
--- CSC309  Computer Networks               3 units
+-- ---------- COURSES ----------
+-- The complete ND and HND curriculum for every FPU programme is
+-- inserted by scripts/seed-fpu-curriculum.js, NOT this file.
+-- See that script for the source of truth.
 
 -- ---------- DEMO STUDENTS ----------
--- Student A: 2021/CSC/001  Level 300   (GREEN — good attendance, high scores)
--- Student B: 2021/CSC/002  Level 300   (YELLOW — moderate)
--- Student C: 2021/CSC/003  Level 300   (ORANGE — low attendance, failed 2)
--- Student D: 2021/CSC/004  Level 300   (RED — critical)
+-- Student A: 2026/CSC/001   (GREEN  — good attendance, high scores)
+-- Student B: 2026/CSC/002   (YELLOW — moderate)
+-- Student C: 2026/CSC/003   (ORANGE — low attendance, failed 2)
+-- Student D: 2026/CSC/004   (RED    — critical)

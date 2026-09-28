@@ -1,6 +1,6 @@
 -- ============================================================
 -- SMARTACADEMIC — PostgreSQL Database Schema
--- Version: 1.1
+-- Version: 1.3
 -- Description: Full schema for Federal Polytechnic, Ugep
 --              academic early-warning system.
 -- Run via: node scripts/init-db.js
@@ -10,6 +10,7 @@
 -- 0. CLEAN SLATE (safe for dev — comment out in production)
 -- ============================================================
 DROP TABLE IF EXISTS audit_logs            CASCADE;
+DROP TABLE IF EXISTS notification_log      CASCADE;
 DROP TABLE IF EXISTS notifications         CASCADE;
 DROP TABLE IF EXISTS interventions         CASCADE;
 DROP TABLE IF EXISTS risk_assessments      CASCADE;
@@ -29,6 +30,7 @@ DROP TABLE IF EXISTS programmes            CASCADE;
 DROP TABLE IF EXISTS departments           CASCADE;
 DROP TABLE IF EXISTS users                 CASCADE;
 DROP TABLE IF EXISTS roles                 CASCADE;
+DROP TABLE IF EXISTS hod_submissions       CASCADE;
 
 -- ============================================================
 -- 1. ROLES
@@ -349,6 +351,16 @@ CREATE TABLE results (
   grade        VARCHAR(2),
   grade_point  NUMERIC(3,2),
   is_published BOOLEAN NOT NULL DEFAULT FALSE,
+
+  -- Submission workflow
+  submission_status VARCHAR(15) NOT NULL DEFAULT 'draft'
+                    CHECK (submission_status IN ('draft','submitted','approved','returned')),
+  submitted_at  TIMESTAMPTZ,
+  submitted_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  approved_at   TIMESTAMPTZ,
+  approved_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  return_reason TEXT,
+
   computed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (student_id, course_id, session_id, semester_id)
 );
@@ -356,6 +368,7 @@ CREATE TABLE results (
 CREATE INDEX idx_results_student ON results(student_id);
 CREATE INDEX idx_results_course  ON results(course_id);
 CREATE INDEX idx_results_session ON results(session_id, semester_id);
+CREATE INDEX idx_results_submission_status ON results(submission_status);
 
 COMMENT ON TABLE results IS 'Final computed results per student per course';
 
@@ -452,7 +465,28 @@ CREATE INDEX idx_notifications_created  ON notifications(created_at DESC);
 COMMENT ON TABLE notifications IS 'Per-user notifications';
 
 -- ============================================================
--- 19. AUDIT LOGS
+-- 19. NOTIFICATION LOG (email + SMS delivery audit)
+-- ============================================================
+CREATE TABLE notification_log (
+  id              SERIAL PRIMARY KEY,
+  user_id         INT REFERENCES users(id) ON DELETE SET NULL,
+  channel         VARCHAR(10) NOT NULL CHECK (channel IN ('email','sms','inapp')),
+  recipient       VARCHAR(150) NOT NULL,
+  subject         VARCHAR(200),
+  status          VARCHAR(20) NOT NULL CHECK (status IN ('sent','failed','skipped')),
+  error           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notif_log_user    ON notification_log(user_id);
+CREATE INDEX idx_notif_log_channel ON notification_log(channel);
+CREATE INDEX idx_notif_log_status  ON notification_log(status);
+CREATE INDEX idx_notif_log_date    ON notification_log(created_at DESC);
+
+COMMENT ON TABLE notification_log IS 'Audit trail for email and SMS delivery attempts';
+
+-- ============================================================
+-- 20. AUDIT LOGS
 -- ============================================================
 CREATE TABLE audit_logs (
   id                SERIAL PRIMARY KEY,
@@ -473,7 +507,7 @@ CREATE INDEX idx_audit_date   ON audit_logs(created_at DESC);
 COMMENT ON TABLE audit_logs IS 'Immutable activity log for compliance';
 
 -- ============================================================
--- 20. SETTINGS
+-- 21. SETTINGS
 -- ============================================================
 CREATE TABLE settings (
   key         VARCHAR(60) PRIMARY KEY,
@@ -487,7 +521,33 @@ CREATE TABLE settings (
 COMMENT ON TABLE settings IS 'Configurable system settings';
 
 -- ============================================================
--- 21. TRIGGER — auto-update updated_at
+-- 22. HOD SUBMISSIONS
+-- HODs propose new students/lecturers/courses; admin approves.
+-- ============================================================
+CREATE TABLE hod_submissions (
+  id              SERIAL PRIMARY KEY,
+  hod_user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  department_id   INT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+  type            VARCHAR(20) NOT NULL
+                  CHECK (type IN ('student', 'lecturer', 'course')),
+  status          VARCHAR(15) NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'approved', 'rejected')),
+  payload         JSONB NOT NULL,
+  admin_notes     TEXT,
+  reviewed_by     INT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at     TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_hod_submissions_status ON hod_submissions(status);
+CREATE INDEX idx_hod_submissions_type   ON hod_submissions(type);
+CREATE INDEX idx_hod_submissions_hod    ON hod_submissions(hod_user_id);
+
+COMMENT ON TABLE hod_submissions IS 'Requests from HODs awaiting admin approval';
+
+-- ============================================================
+-- 23. TRIGGER — auto-update updated_at
 -- ============================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -505,7 +565,7 @@ BEGIN
     SELECT unnest(ARRAY[
       'users','departments','programmes','lecturers','students',
       'sessions','semesters','courses','assessments','scores',
-      'interventions','settings'
+      'interventions','settings','hod_submissions'
     ])
   LOOP
     EXECUTE format(
@@ -519,7 +579,7 @@ BEGIN
 END $$;
 
 -- ============================================================
--- 22. DEFAULT SETTINGS ROWS
+-- 24. DEFAULT SETTINGS ROWS
 -- ============================================================
 INSERT INTO settings (key, value, category, description) VALUES
   ('institution_name',         'Federal Polytechnic, Ugep',          'general',      'Institution name'),
@@ -550,25 +610,6 @@ INSERT INTO settings (key, value, category, description) VALUES
   ('risk_orange_min',          '50',                                 'risk',         'Min score for ORANGE'),
   ('risk_red_min',             '75',                                 'risk',         'Min score for RED')
 ON CONFLICT (key) DO NOTHING;
-
--- ============================================================
--- 21. NOTIFICATION LOG
--- ============================================================
-CREATE TABLE IF NOT EXISTS notification_log (
-  id              SERIAL PRIMARY KEY,
-  user_id         INT REFERENCES users(id) ON DELETE SET NULL,
-  channel         VARCHAR(10) NOT NULL CHECK (channel IN ('email','sms','inapp')),
-  recipient       VARCHAR(150) NOT NULL,
-  subject         VARCHAR(200),
-  status          VARCHAR(20) NOT NULL CHECK (status IN ('sent','failed','skipped')),
-  error           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_notif_log_user    ON notification_log(user_id);
-CREATE INDEX IF NOT EXISTS idx_notif_log_channel ON notification_log(channel);
-CREATE INDEX IF NOT EXISTS idx_notif_log_status  ON notification_log(status);
-CREATE INDEX IF NOT EXISTS idx_notif_log_date    ON notification_log(created_at DESC);
 
 -- ============================================================
 -- END OF SCHEMA

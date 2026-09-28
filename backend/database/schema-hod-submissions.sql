@@ -2,6 +2,10 @@
 -- SMARTACADEMIC — HOD Submissions
 -- Allows HODs to propose new students, lecturers, or courses
 -- that require admin approval before being created.
+-- This file is standalone — run it via:
+--   node scripts/create-hod-submissions-table.js
+-- It's already included in schema.sql as table 22, so running
+-- this is only necessary if you're migrating an existing DB.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS hod_submissions (
