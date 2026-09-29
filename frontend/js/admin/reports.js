@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // SMARTACADEMIC — Admin Reports
 // Risk distribution, departmental performance, attendance report,
 // student lookup, and CSV/PDF/Excel export.

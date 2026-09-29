@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 (function () {
   const { $, api, esc, initials, openModal } = window.SACrud;
   const state = { search: '', level: '' };
