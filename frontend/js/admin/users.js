@@ -1,7 +1,7 @@
 ﻿// ============================================================
 // SMARTACADEMIC — Admin Users Management
 // List, search, filter, create, edit, activate/deactivate,
-// reset password, delete. Uses a reusable modal.
+// reset password, delete, invite.
 // ============================================================
 
 'use strict';
@@ -23,7 +23,10 @@
 
   /* ---------- Auth helpers ---------- */
   const getToken = () => localStorage.getItem('sa_token');
-  const authH = () => ({ Authorization: 'Bearer ' + getToken(), 'Content-Type': 'application/json' });
+  const authH = () => ({
+    Authorization: 'Bearer ' + getToken(),
+    'Content-Type': 'application/json',
+  });
 
   async function api(path, opts = {}) {
     const res = await fetch(path, { headers: authH(), ...opts });
@@ -51,31 +54,84 @@
   /* ============================================================
      MODAL
      ============================================================ */
-  function openModal({ title, subtitle = '', body, confirmText = 'Save', onConfirm, size = '' }) {
-    const root = $('#modalRoot');
+  function openModal({ title, subtitle = '', body, confirmText = 'Save', onConfirm, size = '', onReady }) {
+    const root = $('#modalRoot') || (() => {
+      const d = document.createElement('div');
+      d.id = 'modalRoot';
+      document.body.appendChild(d);
+      return d;
+    })();
+
+    const previouslyFocused = document.activeElement;
     const id = 'modal_' + Date.now();
 
     root.innerHTML = `
-      <div class="modal-backdrop open" data-modal="${id}">
+      <div class="modal-backdrop open" data-modal="${id}" role="dialog" aria-modal="true">
         <div class="modal ${size}">
           <div class="modal-head">
             <div>
               <h3>${esc(title)}</h3>
               <p>${esc(subtitle)}</p>
             </div>
-            <button class="modal-close" data-close>×</button>
+            <button class="modal-close" data-close type="button" aria-label="Close">×</button>
           </div>
           <div class="modal-body">${body}</div>
           <div class="modal-foot">
-            <button class="btn btn-ghost" data-close>Cancel</button>
-            <button class="btn btn-primary" data-confirm>${esc(confirmText)}</button>
+            <button class="btn btn-ghost" data-close type="button">Cancel</button>
+            <button class="btn btn-primary" data-confirm type="button">${esc(confirmText)}</button>
           </div>
         </div>
       </div>`;
 
     const backdrop = root.querySelector('.modal-backdrop');
 
-    function close() { backdrop.remove(); }
+    function close() {
+      if (!document.body.contains(backdrop)) return;
+      backdrop.remove();
+      document.removeEventListener('keydown', onKeydown);
+      try { previouslyFocused && previouslyFocused.focus(); } catch { /* ignore */ }
+    }
+
+    function onKeydown(e) {
+      if (!document.body.contains(backdrop)) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const el = document.activeElement;
+        const tag = el?.tagName?.toLowerCase();
+        if (tag === 'textarea') return;
+        if (el && el.hasAttribute('data-close')) return;
+        const confirmBtn = backdrop.querySelector('[data-confirm]');
+        if (confirmBtn && !confirmBtn.disabled) {
+          e.preventDefault();
+          confirmBtn.click();
+        }
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusables = Array.from(
+          backdrop.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => el.offsetParent !== null);
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last  = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', onKeydown);
 
     backdrop.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
@@ -83,19 +139,28 @@
     const confirmBtn = backdrop.querySelector('[data-confirm]');
     confirmBtn.addEventListener('click', async () => {
       confirmBtn.disabled = true;
+      const orig = confirmBtn.textContent;
       confirmBtn.textContent = 'Working...';
       try {
         await onConfirm(backdrop, close);
       } catch (err) {
         console.error(err);
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = confirmText;
+        alert('Action failed.');
+      } finally {
+        if (document.body.contains(confirmBtn)) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = orig;
+        }
       }
     });
 
-    // Focus first input
+    if (typeof onReady === 'function') {
+      setTimeout(() => onReady(backdrop, close), 30);
+    }
+
     const firstInput = backdrop.querySelector('input, select, textarea');
-    if (firstInput) setTimeout(() => firstInput.focus(), 50);
+    if (firstInput) setTimeout(() => firstInput.focus(), 60);
+    else            setTimeout(() => confirmBtn.focus(), 60);
 
     return { close, backdrop };
   }
@@ -173,19 +238,19 @@
           <td>${fmtDate(u.last_login_at)}</td>
           <td>
             <div class="actions">
-              <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${u.id}">Edit</button>
+              <button class="btn btn-ghost btn-sm" data-action="edit"   data-id="${u.id}">Edit</button>
               <button class="btn btn-ghost btn-sm" data-action="toggle" data-id="${u.id}">
                 ${u.is_active ? 'Deactivate' : 'Activate'}
               </button>
-              <button class="btn btn-ghost btn-sm" data-action="menu" data-id="${u.id}">⋯</button>
+              <button class="btn btn-ghost btn-sm" data-action="menu"   data-id="${u.id}" title="More">⋯</button>
             </div>
           </td>
         </tr>`;
     }).join('');
 
-    // Wire row actions
     body.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => handleAction(btn.dataset.action, parseInt(btn.dataset.id, 10)));
+      btn.addEventListener('click', () =>
+        handleAction(btn.dataset.action, parseInt(btn.dataset.id, 10)));
     });
   }
 
@@ -193,12 +258,12 @@
      PAGINATION
      ============================================================ */
   function renderPagination() {
-    const info = $('#paginationInfo');
+    const info    = $('#paginationInfo');
     const buttons = $('#paginationButtons');
     const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
 
     const start = (state.page - 1) * state.limit + 1;
-    const end = Math.min(state.page * state.limit, state.total);
+    const end   = Math.min(state.page * state.limit, state.total);
     info.textContent = state.total === 0
       ? 'No results'
       : `Showing ${start}–${end} of ${state.total}`;
@@ -233,19 +298,20 @@
     const user = state.items.find(u => u.id === id);
     if (!user) return;
 
-    if (action === 'edit') return openEditModal(user);
+    if (action === 'edit')   return openEditModal(user);
     if (action === 'toggle') return toggleActive(user);
-    if (action === 'menu') return openRowMenu(user);
+    if (action === 'menu')   return openRowMenu(user);
   }
 
   /* ---------- Toggle active ---------- */
-  async function toggleActive(user) {
+  function toggleActive(user) {
     const verb = user.is_active ? 'deactivate' : 'activate';
+    const label = verb[0].toUpperCase() + verb.slice(1);
     openModal({
-      title: `${verb[0].toUpperCase() + verb.slice(1)} user?`,
+      title: `${label} user?`,
       subtitle: user.full_name,
       size: 'sm',
-      confirmText: verb[0].toUpperCase() + verb.slice(1),
+      confirmText: label,
       body: `<p>Are you sure you want to ${verb} <strong>${esc(user.full_name)}</strong>?</p>`,
       onConfirm: async (_bd, close) => {
         const { ok, data } = await api(`/api/admin/users/${user.id}/toggle-active`, { method: 'POST' });
@@ -282,16 +348,16 @@
       <div class="field">
         <label>Status</label>
         <select class="select" id="m_active">
-          <option value="true" ${user.is_active ? 'selected' : ''}>Active</option>
+          <option value="true"  ${user.is_active ? 'selected' : ''}>Active</option>
           <option value="false" ${!user.is_active ? 'selected' : ''}>Inactive</option>
         </select>
       </div>
-      <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
         <button type="button" class="btn btn-ghost btn-sm" id="m_reset_pw_btn">🔑 Reset password</button>
       </div>
     `;
 
-    openModal({
+    const modal = openModal({
       title: 'Edit user',
       subtitle: user.email,
       body,
@@ -312,17 +378,15 @@
         close();
         loadUsers();
       },
+      onReady: (bd) => {
+        const resetBtn = bd.querySelector('#m_reset_pw_btn');
+        if (!resetBtn) return;
+        resetBtn.addEventListener('click', () => {
+          modal.close();
+          openResetPasswordModal(user);
+        });
+      },
     });
-
-    // Wire reset password button after modal renders
-    setTimeout(() => {
-      const btn = document.getElementById('m_reset_pw_btn');
-      if (!btn) return;
-      btn.addEventListener('click', () => {
-        document.querySelector('.modal-backdrop')?.remove();
-        openResetPasswordModal(user);
-      });
-    }, 30);
   }
 
   /* ---------- Reset password modal ---------- */
@@ -334,7 +398,7 @@
       </p>
       <div class="field">
         <label>New password</label>
-        <input class="input" id="m_new_pw" type="text" value="Temp@${Math.random().toString(36).slice(2,8)}" />
+        <input class="input" id="m_new_pw" type="text" value="Temp@${Math.random().toString(36).slice(2, 8)}" />
       </div>
     `;
     openModal({
@@ -346,7 +410,8 @@
       onConfirm: async (bd, close) => {
         const new_password = bd.querySelector('#m_new_pw').value;
         if (!new_password || new_password.length < 6) {
-          alert('Password must be at least 6 characters.'); return;
+          alert('Password must be at least 6 characters.');
+          return;
         }
         const { ok, data } = await api(`/api/admin/users/${user.id}/reset-password`, {
           method: 'POST',
@@ -359,34 +424,41 @@
     });
   }
 
-  /* ---------- Row menu (delete) ---------- */
+  /* ---------- Row menu ---------- */
   function openRowMenu(user) {
     const body = `
       <p style="margin-bottom:14px;color:var(--ink-3);font-size:14px;">
         Actions for <strong>${esc(user.full_name)}</strong>:
       </p>
       <button type="button" class="btn btn-ghost w-full mb-2" id="m_reset_pw">🔑 Reset password</button>
-      <button type="button" class="btn btn-danger w-full" id="m_delete">🗑️ Delete user</button>
+      <button type="button" class="btn btn-danger w-full"        id="m_delete">🗑️ Delete user</button>
     `;
-    openModal({
+
+    const modal = openModal({
       title: 'More actions',
       subtitle: user.email,
       size: 'sm',
       confirmText: 'Close',
       body,
       onConfirm: (_b, close) => close(),
-    });
+      onReady: (bd) => {
+        const resetBtn  = bd.querySelector('#m_reset_pw');
+        const deleteBtn = bd.querySelector('#m_delete');
 
-    setTimeout(() => {
-      document.getElementById('m_reset_pw')?.addEventListener('click', () => {
-        document.querySelector('.modal-backdrop')?.remove();
-        openResetPasswordModal(user);
-      });
-      document.getElementById('m_delete')?.addEventListener('click', () => {
-        document.querySelector('.modal-backdrop')?.remove();
-        confirmDelete(user);
-      });
-    }, 30);
+        if (resetBtn) {
+          resetBtn.addEventListener('click', () => {
+            modal.close();
+            openResetPasswordModal(user);
+          });
+        }
+        if (deleteBtn) {
+          deleteBtn.addEventListener('click', () => {
+            modal.close();
+            confirmDelete(user);
+          });
+        }
+      },
+    });
   }
 
   function confirmDelete(user) {
@@ -431,7 +503,7 @@
       </div>
       <div class="field">
         <label>Password <span style="color:var(--red)">*</span></label>
-        <input class="input" id="m_password" type="password" value="Welcome@${Math.random().toString(36).slice(2,6)}" />
+        <input class="input" id="m_password" type="text" value="Welcome@${Math.random().toString(36).slice(2, 6)}" />
         <p style="font-size:12px;color:var(--ink-3);margin-top:6px;">User must change this on first login.</p>
       </div>
     `;
@@ -455,7 +527,8 @@
         if (!ok) {
           let msg = data?.error || 'Failed';
           if (Array.isArray(data?.details)) msg = data.details.map(d => `${d.field}: ${d.message}`).join(' · ');
-          alert(msg); return;
+          alert(msg);
+          return;
         }
         close();
         loadUsers();
@@ -463,6 +536,7 @@
     });
   }
 
+  /* ---------- Invite modal ---------- */
   function openInviteModal() {
     openModal({
       title: 'Invite a user',
@@ -488,9 +562,9 @@
       `,
       onConfirm: async (bd, close) => {
         const payload = {
-          email: bd.querySelector('#inv_email').value.trim(),
+          email:     bd.querySelector('#inv_email').value.trim(),
           full_name: bd.querySelector('#inv_name').value.trim() || null,
-          role: bd.querySelector('#inv_role').value,
+          role:      bd.querySelector('#inv_role').value,
         };
         if (!payload.email) { alert('Email required'); return; }
         const { ok, data } = await api('/api/auth/invite', {
@@ -506,6 +580,7 @@
       },
     });
   }
+
   /* ============================================================
      FILTERS
      ============================================================ */
@@ -547,11 +622,21 @@
      BOOT
      ============================================================ */
   function boot() {
+    if (window.__adminUsersBooted) return;
+    window.__adminUsersBooted = true;
+
     bindFilters();
+
+    // Invite button — bind inside boot so it's guaranteed to exist.
+    const invBtn = document.getElementById('btnInvite');
+    if (invBtn && !invBtn.dataset.bound) {
+      invBtn.dataset.bound = '1';
+      invBtn.addEventListener('click', openInviteModal);
+    }
+
     loadUsers();
   }
-  const invBtn = document.getElementById('btnInvite');
-  if (invBtn) invBtn.addEventListener('click', openInviteModal);
 
   document.addEventListener('sa:layout-ready', boot);
+  setTimeout(boot, 1000); // fallback in case layout-ready never fires
 })();

@@ -8,6 +8,20 @@
 
 (function () {
   /* ============================================================
+     FOUC FIX
+     Set body[data-role] as early as possible so the sidebar's
+     role-scoped menus are correctly filtered before the sidebar
+     HTML is injected.
+     ============================================================ */
+  try {
+    const role = localStorage.getItem('sa_role');
+    if (role) {
+      document.documentElement.setAttribute('data-role', role);
+      if (document.body) document.body.setAttribute('data-role', role);
+    }
+  } catch { /* ignore */ }
+
+  /* ============================================================
      TOGGLE LOGIC
      ============================================================ */
   function isMobile() {
@@ -77,6 +91,16 @@
     setActiveLink,
     logout,
     init: () => {
+      // Re-apply the role attribute in case the sidebar HTML was
+      // injected after our initial attempt.
+      try {
+        const role = localStorage.getItem('sa_role');
+        if (role) {
+          document.documentElement.setAttribute('data-role', role);
+          document.body.setAttribute('data-role', role);
+        }
+      } catch { /* ignore */ }
+
       setActiveLink();
 
       // Sidebar toggle buttons

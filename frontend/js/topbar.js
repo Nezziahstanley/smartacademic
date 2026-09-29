@@ -9,6 +9,16 @@
 'use strict';
 
 (function () {
+  /* ============================================================
+     0. FOUC FIX — set role on <html> before anything else
+     ============================================================ */
+  try {
+    const role = localStorage.getItem('sa_role');
+    if (role) {
+      document.documentElement.setAttribute('data-role', role);
+    }
+  } catch { /* ignore */ }
+
   const $  = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -114,7 +124,6 @@
         const id = parseInt(el.dataset.id, 10);
         const link = el.dataset.link;
 
-        // Mark read first (best effort)
         if (el.classList.contains('unread')) {
           try {
             await fetch('/api/notifications/' + id + '/read', {
@@ -122,7 +131,6 @@
               headers: { Authorization: 'Bearer ' + token },
             });
             el.classList.remove('unread');
-            // Decrement badge
             const badge = document.querySelector('.tb-badge[data-notif-badge]');
             if (badge) {
               const n = Math.max(0, parseInt(badge.dataset.count || '0', 10) - 1);
@@ -132,7 +140,6 @@
           } catch { /* ignore */ }
         }
 
-        // Navigate if there's a deep-link
         if (link) window.location.href = link;
       });
     });
@@ -177,7 +184,6 @@
     const name = user.full_name || 'User';
     const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
-    // Avatar (photo OR initials)
     $$('[data-user-avatar]').forEach(el => {
       if (user.photo_url) {
         el.textContent = '';
@@ -422,7 +428,7 @@
 
     if (window.Sidebar) window.Sidebar.init();
 
-        // Load the table-scroll hint helper (once per page)
+    // Load the table-scroll hint helper (once per page)
     if (!document.querySelector('script[data-table-scroll]')) {
       const s = document.createElement('script');
       s.src = '/js/admin/table-scroll.js';

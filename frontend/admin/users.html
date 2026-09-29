@@ -4,6 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Users — SMARTACADEMIC Admin</title>
+  <script>
+    // Set role synchronously, before CSS applies, to prevent sidebar FOUC.
+    (function () {
+      try {
+        var role = localStorage.getItem('sa_role');
+        if (role) document.documentElement.setAttribute('data-role', role);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="/css/layout.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/topbar.css" />
@@ -19,17 +28,19 @@
 
       <main class="page">
 
+        <!-- ============ PAGE HEADER (single actions block) ============ -->
         <div class="page-header">
           <div>
             <h1>Users</h1>
             <p>Manage all accounts across the system.</p>
           </div>
           <div class="page-actions">
+            <button class="btn btn-ghost"   id="btnInvite">✉️ Invite by Email</button>
             <button class="btn btn-primary" id="btnNewUser">+ New User</button>
           </div>
         </div>
 
-        <!-- Filters -->
+        <!-- ============ FILTERS ============ -->
         <div class="filters">
           <div class="search">
             <input type="search" id="searchInput" placeholder="Search by name or email..." />
@@ -48,13 +59,8 @@
           </select>
           <button class="btn btn-ghost btn-sm" id="btnReset">Reset</button>
         </div>
-        
-        <div class="page-actions">
-          <button class="btn btn-ghost" id="btnInvite">✉️ Invite by Email</button>
-          <button class="btn btn-primary" id="btnNewUser">+ New User</button>
-        </div>
 
-        <!-- Table -->
+        <!-- ============ TABLE ============ -->
         <div class="table-wrap">
           <table class="table">
             <thead>
@@ -89,6 +95,7 @@
 
   <script src="/js/sidebar.js"></script>
   <script src="/js/topbar.js"></script>
+  <script src="/js/admin/crud-shared.js"></script>
   <script src="/js/admin/users.js"></script>
 </body>
 </html>
