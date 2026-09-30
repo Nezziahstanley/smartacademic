@@ -13,9 +13,9 @@ const { computeGPA, computeSemesterTrend, computeGPADecline, countFailed } = req
 /* ============================================================
    1. RECOMPUTE RESULTS FROM SCORES
    For each student × course × session × semester:
-     - CA average = mean of assignment/test/ca scores (weighted)
-     - Exam score  = exam score(s)
-     - Total       = 0.3 * CA + 0.7 * Exam  (already scaled to 100)
+     - CA average = weighted sum of assignment/test/ca scores (capped at 30)
+     - Exam score  = weighted sum of exam scores (capped at 70)
+     - Total       = CA + Exam (0–100)
      - Grade + grade point from total
    ============================================================ */
 async function recomputeResults({ sessionId = null, semesterId = null } = {}) {
@@ -38,7 +38,7 @@ async function recomputeResults({ sessionId = null, semesterId = null } = {}) {
   let updated = 0;
 
   for (const t of tuples.rows) {
-    // CA: all assessment types EXCEPT exam → scaled to 30
+    // CA: assignment / test / ca → scaled to 30
     const caRow = await db.query(`
       SELECT
         COALESCE(SUM((sc.score / NULLIF(a.max_score, 0)) * a.weight), 0) AS weighted_pct
@@ -49,7 +49,7 @@ async function recomputeResults({ sessionId = null, semesterId = null } = {}) {
          AND a.type IN ('assignment','test','ca')
     `, [t.student_id, t.course_id, t.session_id, t.semester_id]);
 
-    const caPct = parseFloat(caRow.rows[0].weighted_pct || 0); // 0–30 weight-capped
+    const caPct   = parseFloat(caRow.rows[0].weighted_pct || 0);
     const caScore = Math.min(30, caPct);
 
     // Exam: type = 'exam' → scaled to 70
@@ -63,25 +63,24 @@ async function recomputeResults({ sessionId = null, semesterId = null } = {}) {
          AND a.type = 'exam'
     `, [t.student_id, t.course_id, t.session_id, t.semester_id]);
 
-    const examPct = parseFloat(examRow.rows[0].weighted_pct || 0); // 0–70 weight-capped
+    const examPct   = parseFloat(examRow.rows[0].weighted_pct || 0);
     const examScore = Math.min(70, examPct);
 
     const total = +(caScore + examScore).toFixed(2);
     const { grade, point } = scoreToGrade(total);
 
-    // Upsert
     await db.query(`
       INSERT INTO results
         (student_id, course_id, session_id, semester_id,
          ca_score, exam_score, total_score, grade, grade_point)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       ON CONFLICT (student_id, course_id, session_id, semester_id) DO UPDATE
-         SET ca_score = EXCLUDED.ca_score,
-             exam_score = EXCLUDED.exam_score,
-             total_score = EXCLUDED.total_score,
-             grade = EXCLUDED.grade,
-             grade_point = EXCLUDED.grade_point,
-             computed_at = NOW()
+         SET ca_score     = EXCLUDED.ca_score,
+             exam_score   = EXCLUDED.exam_score,
+             total_score  = EXCLUDED.total_score,
+             grade        = EXCLUDED.grade,
+             grade_point  = EXCLUDED.grade_point,
+             computed_at  = NOW()
     `, [t.student_id, t.course_id, t.session_id, t.semester_id,
         caScore, examScore, total, grade, point]);
 
@@ -94,6 +93,8 @@ async function recomputeResults({ sessionId = null, semesterId = null } = {}) {
 /* ============================================================
    2. COMPUTE STUDENT PERFORMANCE SNAPSHOT
    For a single student: GPA, CGPA, semester trend, failed courses.
+   Includes a DATA SUFFICIENCY GUARD so that students with no
+   records at all are not misclassified as failing.
    ============================================================ */
 async function computeStudentPerformance(studentId) {
   const r = await db.query(`
@@ -107,10 +108,36 @@ async function computeStudentPerformance(studentId) {
   `, [studentId]);
 
   const rows = r.rows;
-  const cgpa = computeGPA(rows);
-  const trend = computeSemesterTrend(rows);
-  const latestGpa = trend.length ? trend[trend.length - 1].gpa : cgpa;
-  const gpaDecline = computeGPADecline(trend);
+
+  // ---------- DATA SUFFICIENCY CHECK ----------
+  // If there are no published results AND no attendance records,
+  // the student cannot be meaningfully assessed yet.
+  const attnCheck = await db.query(
+    `SELECT COUNT(*)::int AS n FROM attendance WHERE student_id = $1`,
+    [studentId]
+  );
+  const hasResults    = rows.length > 0;
+  const hasAttendance = attnCheck.rows[0].n > 0;
+
+  if (!hasResults && !hasAttendance) {
+    return {
+      gpa: 0,
+      cgpa: 0,
+      gpaDecline: 0,
+      failedCourses: 0,
+      trend: [],
+      attendancePct: 0,
+      caAvg: 0,
+      examAvg: 0,
+      hasSufficientData: false,
+    };
+  }
+  // ---------- END GUARD ----------
+
+  const cgpa          = computeGPA(rows);
+  const trend         = computeSemesterTrend(rows);
+  const latestGpa     = trend.length ? trend[trend.length - 1].gpa : cgpa;
+  const gpaDecline    = computeGPADecline(trend);
   const failedCourses = countFailed(rows);
 
   // Attendance summary
@@ -123,7 +150,7 @@ async function computeStudentPerformance(studentId) {
 
   // CA / Exam averages
   const avg = await db.query(`
-    SELECT ROUND(AVG(ca_score)::numeric, 2) AS ca_avg,
+    SELECT ROUND(AVG(ca_score)::numeric, 2)  AS ca_avg,
            ROUND(AVG(exam_score)::numeric, 2) AS exam_avg
       FROM results WHERE student_id = $1
   `, [studentId]);
@@ -137,6 +164,7 @@ async function computeStudentPerformance(studentId) {
     attendancePct: parseFloat(attn.rows[0].pct || 0),
     caAvg: parseFloat(avg.rows[0].ca_avg || 0),
     examAvg: parseFloat(avg.rows[0].exam_avg || 0),
+    hasSufficientData: true,
   };
 }
 
